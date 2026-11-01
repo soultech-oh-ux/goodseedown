@@ -1,0 +1,25 @@
+{
+ "when": "2026-10-31T23:55:46.082Z",
+ "mode": "exe",
+ "total": 3,
+ "passed": 3,
+ "limited": 0,
+ "failed": 0,
+ "results": [
+  {
+   "name": "UI9 [붙여넣기] 버튼 → 클립보드 글에서 링크만 입력창에 넣음",
+   "ok": true,
+   "detail": "https://www.youtube.com/watch?v=SkVqJ1SGeL0"
+  },
+  {
+   "name": "UI9 클립보드 감지: 링크를 복사하면 알림 줄이 나타남(복사한 링크 중 하나가 표시됨)",
+   "ok": true,
+   "detail": "https://www.youtube.com/watch?v=SkVqJ1SGeL0"
+  },
+  {
+   "name": "시험 후 시험이 띄운 프로세스 정리",
+   "ok": true,
+   "detail": []
+  }
+ ]
+}

@@ -1,0 +1,677 @@
+{
+ "when": "2026-11-01T14:41:18.798Z",
+ "mode": "exe",
+ "total": 94,
+ "passed": 94,
+ "limited": 0,
+ "failed": 0,
+ "results": [
+  {
+   "name": "UI1 창 제목 \"goodseedown — 동영상 다운로더\"",
+   "ok": true,
+   "detail": "goodseedown — 동영상 다운로더"
+  },
+  {
+   "name": "UI1 첫 실행에 저작권 안내 창 표시(권리자 허락·개인 이용 범위·DRM 우회 없음)",
+   "ok": true,
+   "detail": "goodseedown 을 시작하기 전에\n저작권 안내\n\n저작권이 있는 콘텐츠는 권리자의 허락을 받았거나 개인적으로 이용할 수 있는 범위에서만 내려"
+  },
+  {
+   "name": "UI1 화면 아래에 저작권 안내가 항상 표시됨",
+   "ok": true
+  },
+  {
+   "name": "UI1 확인하면 창이 닫히고 설정에 저장됨(다음 실행부터 안 뜸)",
+   "ok": true,
+   "detail": true
+  },
+  {
+   "name": "UI2 링크 분석 후 옵션 창 표시(제목·업로더·길이·라이선스)",
+   "ok": true,
+   "detail": "Caminandes 3: Llamigos Blender · 2:30 · 라이선스: Creative Commons Attribution license (reuse allowed) 종류 영상 음성만 자막만 화질 240p"
+  },
+  {
+   "name": "UI2 화질 선택지에 8K·4K·1080p·720p 포함",
+   "ok": true,
+   "detail": [
+    "240p",
+    "360p",
+    "480p",
+    "720p (HD)",
+    "1080p (Full HD)",
+    "1440p",
+    "4K (2160p)",
+    "8K (4320p)",
+    "최대 화질(8K까지)"
+   ]
+  },
+  {
+   "name": "UI2 목록에 카드가 생기고 진행 후 \"완료\" 표시",
+   "ok": true,
+   "detail": {
+    "chip": "완료",
+    "p1": "100% · 38.2 MB / 38.2 MB"
+   }
+  },
+  {
+   "name": "UI2 결과 파일 ffprobe: 1080p H.264 MP4·150초",
+   "ok": true,
+   "detail": {
+    "format": "mov,mp4,m4a,3gp,3g2,mj2",
+    "duration": 150.140227,
+    "width": 1920,
+    "height": 1080,
+    "vcodec": "h264",
+    "acodec": "aac",
+    "subs": 0
+   }
+  },
+  {
+   "name": "UI2 \"기본값으로 저장\" 체크 → 설정에 기본값 저장(MP4·1080)",
+   "ok": true,
+   "detail": {
+    "kind": "video",
+    "quality": "1080",
+    "videoFormat": "mp4",
+    "audioFormat": "mp3",
+    "mp3Bitrate": 320,
+    "id3": true,
+    "subs": {
+     "enabled": false,
+     "langs": [],
+     "auto": false,
+     "mode": "srt"
+    }
+   }
+  },
+  {
+   "name": "UI2 완료 카드에 열기·폴더에서 보기·삭제 버튼",
+   "ok": true,
+   "detail": [
+    "open",
+    "folder",
+    "remove"
+   ]
+  },
+  {
+   "name": "UI2 정리: 탭 배지 등 화면 오류 없음(빈 화면 안내 숨김)",
+   "ok": true
+  },
+  {
+   "name": "UI3 진행 중 카드: 퍼센트·속도·남은 시간 표시 + [일시정지][취소] 버튼",
+   "ok": true,
+   "detail": {
+    "p1": "8% · 영상 받는 중 · 2.0 MB / 22.9 MB",
+    "p2": "2.9 MB/s · 남은 시간 0:07"
+   }
+  },
+  {
+   "name": "UI3 [일시정지] → \"일시정지\" 상태·[이어받기][취소] 버튼",
+   "ok": true,
+   "detail": [
+    "resume",
+    "cancel"
+   ]
+  },
+  {
+   "name": "UI3 일시정지 중에는 진행률이 변하지 않음",
+   "ok": true,
+   "detail": [
+    8,
+    "8% · 2.0 MB / 22.9 MB"
+   ]
+  },
+  {
+   "name": "UI3 [이어받기] → 다시 \"받는 중\", 진행률이 멈췄던 지점부터 계속(되돌아가지 않음)",
+   "ok": true,
+   "detail": [
+    8,
+    "8% · 영상 받는 중 · 2.0 MB / 22.9 MB"
+   ]
+  },
+  {
+   "name": "UI3 [취소] 누르면 확인창(\"받던 내용(임시 파일)을 지우고 취소할까요?\")",
+   "ok": true,
+   "detail": "다운로드 취소\n\n받던 내용(임시 파일)을 지우고 취소할까요?\n\n계속 받기\n취소하기"
+  },
+  {
+   "name": "UI3 취소됨 상태·임시 파일 삭제·[다시 시작][삭제] 버튼",
+   "ok": true,
+   "detail": {
+    "acts": [
+     "retry",
+     "remove"
+    ],
+    "tmp": 0
+   }
+  },
+  {
+   "name": "UI3 [다시 시작] → 완료·ffprobe 1080p MKV",
+   "ok": true,
+   "detail": {
+    "format": "matroska,webm",
+    "duration": 150.128,
+    "width": 1920,
+    "height": 1080,
+    "vcodec": "av1",
+    "acodec": "opus",
+    "subs": 0
+   }
+  },
+  {
+   "name": "UI4 재생목록 분석 → 목록 18개·제목 표시",
+   "ok": true,
+   "detail": "재생목록: Blender Open Movies Blender Studio · 영상 18개 받을 영상 전체 선"
+  },
+  {
+   "name": "UI4 \"앞에서 3개만 선택\" → 3개 선택 표시",
+   "ok": true,
+   "detail": "3개 선택 / 전체 18개"
+  },
+  {
+   "name": "UI4 3개 카드 모두 완료·재생목록 이름 하위 폴더·번호 접두(001 - …)",
+   "ok": true,
+   "detail": [
+    "001 - OVERGROWN - Blender Feature Film (Teaser) [39h7ZJbRcsw].mp3",
+    "002 - SINGULARITY - Painterly Space Adventure [l5OZu-IrXpw].mp3",
+    "003 - Project Gold - Blender Stylized Rendering Showcase [nV_awXI9XJY].mp3"
+   ]
+  },
+  {
+   "name": "UI4 카드에 \"재생목록: Blender Open Movies\" 출처 표시",
+   "ok": true
+  },
+  {
+   "name": "UI5 영상의 수동 자막 언어 목록이 칩으로 표시(영어·프랑스어 등)",
+   "ok": true,
+   "detail": 33
+  },
+  {
+   "name": "UI5 \"자막만\" 선택 시 영상 옵션 숨김·자막 옵션 표시",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "UI5 자막만 받기 → SRT 파일 생성(영어는 존재, 영상에 없는 한국어는 건너뜀)",
+   "ok": true,
+   "detail": {
+    "status": "completed",
+    "msg": "저장됨: C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\vu\\out\\Sintel - Open Movie by Blender Foundation [eRsGyueVLvQ].en.srt",
+    "files": [
+     "Sintel - Open Movie by Blender Foundation [eRsGyueVLvQ].en.srt"
+    ]
+   }
+  },
+  {
+   "name": "UI5 SRT 내용 형식(번호·시간표)",
+   "ok": true,
+   "detail": "1\n00:01:47,250 --> 00:01:50,500\nThis blade has a dark past.\n"
+  },
+  {
+   "name": "UI5 영상에 합치기(소프트 자막) → MP4 안에 자막 트랙 1개(ffprobe)·\"자막을 찾지 못했다\"는 잘못된 안내 없음",
+   "ok": true,
+   "detail": {
+    "status": "completed",
+    "msg": "저장됨: C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\vu\\out\\Spring - Blender Open Movie [WhWc3b3KhnY].mp4",
+    "p": {
+     "format": "mov,mp4,m4a,3gp,3g2,mj2",
+     "duration": 464.166893,
+     "width": 854,
+     "height": 358,
+     "vcodec": "h264",
+     "acodec": "aac",
+     "subs": 1
+    }
+   }
+  },
+  {
+   "name": "UI6 스마트 모드 켜면 버튼이 \"바로 받기\"로 바뀜·설정 저장",
+   "ok": true,
+   "detail": "바로 받기"
+  },
+  {
+   "name": "UI6 링크 붙여넣고 한 번(Enter/버튼)만 눌렀는데 옵션 창 없이 바로 대기열에 들어감",
+   "ok": true,
+   "detail": {
+    "ms": 436,
+    "title": "https://www.youtube.com/watch?v=SkVqJ1SGeL0"
+   }
+  },
+  {
+   "name": "UI6 저장된 기본값(MP4 1080p)대로 받음·영상+재생목록 주소는 영상 한 개만",
+   "ok": true,
+   "detail": 1
+  },
+  {
+   "name": "UI6 스마트 모드 끄면 다시 \"분석\"",
+   "ok": true,
+   "detail": "분석"
+  },
+  {
+   "name": "UI7 [구독하기] → 구독 탭에 재생목록 구독 등록(본 영상 18개)",
+   "ok": true,
+   "detail": "Blender Open Movies 새 영상 알림 켜짐 MP4 · 1080p · 마지막 확인 11. 1. 오후 11:36 · 본 영상 18개 새 영상 알림 지금 확인 구독 해제"
+  },
+  {
+   "name": "UI7 처음 구독할 때 이미 있는 영상은 받지 않음(대기열 비어 있음)",
+   "ok": true,
+   "detail": 0
+  },
+  {
+   "name": "UI7 [지금 확인] → \"새 영상이 없습니다\" 안내",
+   "ok": true,
+   "detail": [
+    "'Blender Open Movies' 을(를) 구독했습니다. 새 영상이 올라오면 알려 드립니다(자동으로 받지는 않아요).",
+    "새 영상이 없습니다."
+   ]
+  },
+  {
+   "name": "UI7 재기동 후 구독이 유지되고 작업 목록은 비어 있음",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "UI7 ★새 영상 감지 → 구독 카드에 \"새 영상 1개 — 자동으로 받지 않습니다\" 알림과 [받기] 버튼만 표시, 다운로드 요청 0건(작업 0개·yt-dlp 실행 0)",
+   "ok": true,
+   "detail": {
+    "text": "새 영상 1개 — 자동으로 받지 않습니다. 받을 영상을 직접 눌러 주세요.Elephants Dream10:55받기새 영상 1개 모두 받기알림 지우기(받지 않음)",
+    "jobs": 0,
+    "procs": 0
+   }
+  },
+  {
+   "name": "UI7 감지 알림 토스트에 \"자동으로 받지 않습니다\" 안내",
+   "ok": true,
+   "detail": [
+    "새 영상 1개를 찾았어요. 자동으로 받지 않으니 받을 영상을 직접 눌러 주세요.",
+    "구독에서 새 영상 1개를 찾았어요. 자동으로 받지 않습니다 — 구독 탭에서 받을 영상을 직접 눌러 주세요."
+   ]
+  },
+  {
+   "name": "UI7 사용자가 [받기]를 누른 영상만 대기열에 들어감(구독 출처 표시)·알림 목록 비워짐",
+   "ok": true,
+   "detail": "Elephants Dream"
+  },
+  {
+   "name": "UI7 정리: 시험으로 받기 시작한 구독 영상을 취소하고 목록에서 지움(yt-dlp 남지 않음)",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "UI7 자동 받기 끄기가 저장됨",
+   "ok": true,
+   "detail": false
+  },
+  {
+   "name": "UI7 [구독 해제] → 목록에서 제거",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "UI8 설정 화면: yt-dlp 엔진 버전(날짜 형식)·앱 버전 표시",
+   "ok": true,
+   "detail": [
+    "2026.10.26 (설치본)",
+    "버전 1.1.0"
+   ]
+  },
+  {
+   "name": "UI8 동시 다운로드 수 변경 저장(5)",
+   "ok": true
+  },
+  {
+   "name": "UI8 범위 밖 값(99)은 6 으로 보정",
+   "ok": true
+  },
+  {
+   "name": "UI8 구독 확인 주기 변경 저장(30분)",
+   "ok": true
+  },
+  {
+   "name": "UI8 스마트 모드 기본값(음성 M4A) 변경 저장",
+   "ok": true,
+   "detail": {
+    "kind": "audio",
+    "quality": "1080",
+    "videoFormat": "mp4",
+    "audioFormat": "m4a",
+    "mp3Bitrate": 320,
+    "id3": true,
+    "subs": {
+     "enabled": false,
+     "langs": [],
+     "auto": false,
+     "mode": "srt"
+    }
+   }
+  },
+  {
+   "name": "UI8 엔진·앱 업데이트 확인 버튼, 라이선스·저작권 안내 버튼 존재",
+   "ok": true
+  },
+  {
+   "name": "UI9 [붙여넣기] 버튼 → 클립보드 글에서 링크만 입력창에 넣음",
+   "ok": true,
+   "detail": "https://www.youtube.com/watch?v=SkVqJ1SGeL0"
+  },
+  {
+   "name": "UI9 ★클립보드에 링크를 복사해도 감지 배너·입력칸 자동 채움 없음, 다운로드 요청 0건(작업 수 그대로·yt-dlp 실행 0)",
+   "ok": true,
+   "detail": {
+    "banner": false,
+    "url": "",
+    "jobs": 0,
+    "procs": 0
+   }
+  },
+  {
+   "name": "UI9 ★스마트 모드를 켜 두고 클립보드에 링크를 복사해도 다운로드 요청 0건(스마트 모드는 붙여넣은 링크를 제출했을 때만)",
+   "ok": true,
+   "detail": {
+    "procs": 0
+   }
+  },
+  {
+   "name": "UI9 [붙여넣기]를 눌러 입력칸에 넣기만 한 상태: 다운로드 요청 0건",
+   "ok": true
+  },
+  {
+   "name": "UI9 [분석] 후 옵션 창이 떠 있는 동안에도 다운로드 요청 0건(옵션 창의 [다운로드]를 눌러야 시작)",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "UI10-0 처음에는 [동영상] 화면 — MP3 입력 카드 숨김·기본 링크창 표시",
+   "ok": true,
+   "detail": "video"
+  },
+  {
+   "name": "UI10-1 [MP3] 화면으로 전환: MP3 카드 표시·동영상용 링크창/스마트 스위치/구독 탭 숨김",
+   "ok": true,
+   "detail": "mp3"
+  },
+  {
+   "name": "UI10-2 ★클립보드에 링크가 있어도 MP3 입력칸은 비어 있고(자동 채움 없음) 다운로드 요청 0건",
+   "ok": true,
+   "detail": {
+    "autoVal": "",
+    "procs": 0
+   }
+  },
+  {
+   "name": "UI10-2b [붙여넣기] 버튼을 누르면 클립보드 글에서 링크만 입력칸에 들어감(그래도 받기를 누르기 전에는 0건)",
+   "ok": true,
+   "detail": "https://www.youtube.com/watch?v=SkVqJ1SGeL0"
+  },
+  {
+   "name": "UI10-3 기본값: 음질 320 kbps 선택·ID3 켜짐·저장 폴더 표시",
+   "ok": true,
+   "detail": [
+    "320",
+    "C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\vu\\mp3"
+   ]
+  },
+  {
+   "name": "UI10-4 마지막 사용 화면(mp3)이 설정 파일에 저장됨",
+   "ok": true,
+   "detail": "mp3"
+  },
+  {
+   "name": "UI10-5 음질 선택지는 128/192/256/320 네 가지뿐",
+   "ok": true
+  },
+  {
+   "name": "UI10-6 음질을 128 로 바꾸면 설정에 저장됨",
+   "ok": true,
+   "detail": {
+    "bitrate": 128,
+    "id3": true,
+    "saveDir": "C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\vu\\mp3"
+   }
+  },
+  {
+   "name": "UI10-7 [MP3 받기] 한 번에 옵션 창 없이 바로 대기열에 들어감(링크 칸은 비워짐)",
+   "ok": true,
+   "detail": {
+    "ms": 416
+   }
+  },
+  {
+   "name": "UI10-8 카드에 \"MP3 128kbps\" 표시·완료",
+   "ok": true,
+   "detail": "Blender · 2:30 · MP3 128kbps 음성"
+  },
+  {
+   "name": "UI10-9 ffprobe: 128000 bps·150초·ID3 제목/아티스트·앨범아트 1장",
+   "ok": true,
+   "detail": {
+    "acodec": "mp3",
+    "bitrate": 128000,
+    "duration": 150.12,
+    "title": "Caminandes 3: Llamigos",
+    "artist": "Blender",
+    "pics": 1
+   }
+  },
+  {
+   "name": "UI10-10 320kbps 단일 영상: 카드 \"MP3 320kbps\"·완료·ffprobe 320000 bps·길이 464초±3·ID3 제목·앨범아트",
+   "ok": true,
+   "detail": {
+    "acodec": "mp3",
+    "bitrate": 320000,
+    "duration": 464.16,
+    "title": "Spring - Blender Open Movie",
+    "artist": "Blender Studio",
+    "pics": 1
+   }
+  },
+  {
+   "name": "UI10-11 같은 영상을 192 로 다시 받으면 파일이 192000 bps 로 바뀜(파일은 하나)",
+   "ok": true,
+   "detail": {
+    "acodec": "mp3",
+    "bitrate": 192000,
+    "duration": 150.12,
+    "title": "Caminandes 3: Llamigos",
+    "artist": "Blender",
+    "pics": 1
+   }
+  },
+  {
+   "name": "UI10-12 빈 칸에서 [MP3 받기] → \"링크를 입력해 주세요.\" 안내·작업 추가 없음",
+   "ok": true
+  },
+  {
+   "name": "UI10-13 http(s) 가 아닌 입력 → \"올바른 http(s) 링크가 아닙니다.\" 안내·작업 추가 없음",
+   "ok": true,
+   "detail": 3
+  },
+  {
+   "name": "UI10-14 영상+재생목록 주소: \"이 영상만 / 재생목록 전체\" 선택창이 뜨고, 취소하면 아무것도 추가되지 않음",
+   "ok": true,
+   "detail": 3
+  },
+  {
+   "name": "UI10-15 재생목록 링크 → 분석 후 전체(18개)가 MP3 작업으로 대기열에 들어감",
+   "ok": true,
+   "detail": 18
+  },
+  {
+   "name": "UI10-16 18개 모두 완료·재생목록 이름의 하위 폴더에 번호가 붙은 .mp3 18개(001 - … ~ 018 - …)",
+   "ok": true,
+   "detail": {
+    "n": 18,
+    "first": "001 - OVERGROWN - Blender Feature Film (Teaser) [39h7ZJbRcsw].mp3",
+    "last": "018 - Elephants Dream [TLkA0RELQ1g].mp3",
+    "st": "completed,completed,completed,completed,completed,completed,completed,completed,completed,completed,"
+   }
+  },
+  {
+   "name": "UI10-17 ffprobe(18개 전부): mp3 코덱·192000 bps·제목 태그·앨범아트",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "UI10-18 카드에 \"재생목록: Blender Open Movies\"·\"MP3 192kbps\" 표시",
+   "ok": true
+  },
+  {
+   "name": "UI10-19 [동영상] 화면으로 돌아오면 링크창이 다시 보이고 모든 작업이 보임",
+   "ok": true,
+   "detail": {
+    "nAll": 18,
+    "nTotal": 18
+   }
+  },
+  {
+   "name": "UI10-20 [동영상] 화면으로 바꾸면 마지막 화면(video)이 저장됨",
+   "ok": true,
+   "detail": "video"
+  },
+  {
+   "name": "UI10-21 다시 [MP3] 화면: 선택한 음질(192)이 그대로·MP3 작업만 보임",
+   "ok": true,
+   "detail": "192"
+  },
+  {
+   "name": "UI10-22 [MP3] 화면에서 작업이 없으면 MP3 전용 안내 표시",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "UI10-23 ID3 체크 해제가 설정에 저장됨",
+   "ok": true,
+   "detail": {
+    "bitrate": 192,
+    "id3": false,
+    "saveDir": "C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\vu\\mp3"
+   }
+  },
+  {
+   "name": "UI10-24 앱을 완전히 끄고 다시 켜면 [MP3] 화면으로 시작(마지막 화면 기억)",
+   "ok": true,
+   "detail": {
+    "mode": "mp3",
+    "lastMode": "mp3"
+   }
+  },
+  {
+   "name": "UI10-25 재기동 후에도 음질 192·ID3 켜짐·저장 폴더가 그대로",
+   "ok": true,
+   "detail": [
+    "192",
+    "C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\vu\\mp3"
+   ]
+  },
+  {
+   "name": "UI10-26 \"이 영상만\" → 영상 1개만 대기열에 들어가 진행률·속도 표시(MP3 화면의 목록)",
+   "ok": true,
+   "detail": {
+    "p1": "13% · 음성 받는 중 · 327 KB / 2.4 MB",
+    "p2": "100 KB/s · 남은 시간 0:20"
+   }
+  },
+  {
+   "name": "UI10-27 [일시정지] → \"일시정지\"·[이어받기][취소]·진행률 멈춤",
+   "ok": true,
+   "detail": [
+    [
+     "resume",
+     "cancel"
+    ],
+    13,
+    "13% · 327 KB / 2.4 MB"
+   ]
+  },
+  {
+   "name": "UI10-28 [이어받기] → 다시 받는 중, 진행률이 되돌아가지 않음",
+   "ok": true,
+   "detail": [
+    13,
+    "13% · 영상 받는 중 · 327 KB / 2.4 MB"
+   ]
+  },
+  {
+   "name": "UI10-29 [취소] → 취소됨·임시 파일 삭제·MP3 파일 없음",
+   "ok": true,
+   "detail": {
+    "acts": [
+     "retry",
+     "remove"
+    ]
+   }
+  },
+  {
+   "name": "UI10-30 취소된 MP3 작업 [다시 시작] → 처음부터 다시 진행",
+   "ok": true,
+   "detail": "downloading"
+  },
+  {
+   "name": "UI10-31 [동영상] 화면으로 돌려놓음(설정 저장)",
+   "ok": true,
+   "detail": "video"
+  },
+  {
+   "name": "UI12-1 배포 exe(런처) VersionInfo 실측: LegalCopyright = \"Copyright (c) 2026 굿씨드AI연구소 오경근 박사\"·CompanyName = \"goodseed AI LAB\"",
+   "ok": true,
+   "detail": {
+    "fileVer": "1.1.0.0",
+    "legal": "Copyright (c) 2026 굿씨드AI연구소 오경근 박사",
+    "company": "goodseed AI LAB",
+    "product": "goodseedown"
+   }
+  },
+  {
+   "name": "UI12-2 앱 본체(풀린 goodseedown.exe) VersionInfo 실측: 같은 LegalCopyright·CompanyName·ProductName goodseedown·버전 1.1.0",
+   "ok": true,
+   "detail": {
+    "inner": "C:\\Users\\USER\\AppData\\Local\\goodseedown\\bin\\1.1.0-eef97913\\goodseedown.exe",
+    "b": {
+     "fileVer": "1.1.0",
+     "legal": "Copyright (c) 2026 굿씨드AI연구소 오경근 박사",
+     "company": "goodseed AI LAB",
+     "product": "goodseedown"
+    }
+   }
+  },
+  {
+   "name": "UI12-3 정보창: \"굿씨드AI연구소(goodseed AI LAB) 오경근 박사\"·Copyright 줄 표시",
+   "ok": true,
+   "detail": "goodseedown 1.1.0 Windows x64 동영상·MP3 다운로더  굿씨드AI연구소(goodseed AI LAB) 오경근 박사  Copyright (c) 2026 굿씨드AI연구소 오경근 박사  다운로드 엔진: yt-dlp (Unlicense) · 변환: ffmpeg (GPLv3) — 자세한 내용은 [오픈소스 라이선스]  저작권이 있는 콘텐츠는 권"
+  },
+  {
+   "name": "UI12-4 \"오경근 박사\"는 링크(a)이고 주소는 https://ohkyoungkeun-namecard.vercel.app/",
+   "ok": true,
+   "detail": "https://ohkyoungkeun-namecard.vercel.app/"
+  },
+  {
+   "name": "UI12-5 링크를 누르기 전에는 openExternal 호출 0건",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "UI12-6 ★링크 클릭 → 메인 프로세스가 shell.openExternal(https://ohkyoungkeun-namecard.vercel.app/) 를 정확히 1번 호출",
+   "ok": true,
+   "detail": "shell.openExternal https://ohkyoungkeun-namecard.vercel.app/\n"
+  },
+  {
+   "name": "UI12-7 앱 안에서는 이동하지 않음(앱 화면 주소 그대로·새 창 없음)",
+   "ok": true,
+   "detail": {
+    "before": "file:///C:/Users/USER/AppData/Local/goodseedown/bin/1.1.0-eef97913/resources/app.asar/ui/index.html",
+    "after": "file:///C:/Users/USER/AppData/Local/goodseedown/bin/1.1.0-eef97913/resources/app.asar/ui/index.html",
+    "pages": 1
+   }
+  },
+  {
+   "name": "UI12-8 설정 화면의 [goodseedown 정보] 버튼으로도 정보창이 열림",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "시험 후 시험이 띄운 프로세스 정리",
+   "ok": true,
+   "detail": []
+  }
+ ]
+}

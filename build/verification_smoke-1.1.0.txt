@@ -1,0 +1,17 @@
+prepare-only exit 0
+{
+ "ready": true,
+ "title": "goodseedown — 동영상 다운로더",
+ "appName": "goodseedown",
+ "version": "1.1.0",
+ "packaged": true,
+ "toolsDir": "C:\\Users\\USER\\AppData\\Local\\goodseedown\\bin\\1.1.0-eef97913\\resources\\tools",
+ "ytdlp": true,
+ "ffmpeg": true,
+ "hpatchz": true,
+ "ytdlpVersion": "2026.10.26",
+ "data": "C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\smoke\\data",
+ "launcherExe": "C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\dist\\goodseedown-1.1.0-Windows-x64.exe"
+}
+goodseedown processes before/after: 0 0
+exe sha256 ffd13d3d50a2fd28ee9585256a48e4d151c945b09d425b1f2223aa3dfdad41dd 213139968

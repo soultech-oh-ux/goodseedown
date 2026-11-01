@@ -1,0 +1,363 @@
+{
+ "when": "2026-11-01T15:07:12.938Z",
+ "old": {
+  "ver": "1.1.0",
+  "sha256": "ffd13d3d50a2fd28ee9585256a48e4d151c945b09d425b1f2223aa3dfdad41dd",
+  "size": 213139968
+ },
+ "new": {
+  "ver": "1.1.1",
+  "sha256": "5bbf11a576ad86214c607d55bfa0e04c1f8bf492b8daf0d7756a49463b694d75",
+  "size": 213139968
+ },
+ "total": 47,
+ "passed": 46,
+ "failed": 1,
+ "results": [
+  {
+   "name": "S1-0 1.1.0 앱 기동(창 준비)·현재 버전 1.1.0",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S1-1 새 버전 감지 → 한국어 확인창(새·현재 버전·릴리스 노트·3버튼)",
+   "ok": true,
+   "detail": {
+    "title": "goodseedown 업데이트",
+    "buttons": [
+     "지금 업데이트",
+     "나중에",
+     "이 버전 건너뛰기"
+    ]
+   }
+  },
+  {
+   "name": "S1-1b 패치 없는 릴리스: 확인창에 받을 용량(전체 파일) 표시",
+   "ok": true,
+   "detail": "받을 용량: 약 203.3 MB (전체 파일)"
+  },
+  {
+   "name": "S1-2 [지금 업데이트] 클릭",
+   "ok": true
+  },
+  {
+   "name": "S1-3 교체 완료: 포터블 exe 의 SHA-256 이 새 exe 와 동일",
+   "ok": true,
+   "detail": {
+    "now": "5bbf11a576ad",
+    "new": "5bbf11a576ad"
+   }
+  },
+  {
+   "name": "S1-4 요청 로그: 새 exe·SHA256SUMS 를 받음, 패치 요청 없음",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "S1-5 업데이터 로그에 방식 기록(mode=full)",
+   "ok": true,
+   "detail": [
+    "2026-11-01T14:59:07.039Z downloaded+verified C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\ue\\data-dkqbj\\updates\\goodseedown-1.1.1-Windows-x64.exe sha256=5bbf11a576ad86214c607d55bfa0e04c1f8bf492b8daf0d7756a49463b694d75 mode=full downloadedBytes=213139968"
+   ]
+  },
+  {
+   "name": "S1-6 새 버전 재실행·시작 확인(helper \"update complete\")",
+   "ok": true,
+   "detail": [
+    "2026-11-01T23:59:09 verifying downloaded file\r",
+    "2026-11-01T23:59:11 exe replaced\r",
+    "2026-11-01T23:59:12 update complete\r",
+    ""
+   ]
+  },
+  {
+   "name": "S1-7 재실행된 앱이 실제로 새 버전(1.0.1) — 화면 연결 또는 앱 로그(update to 1.0.1 confirmed)+1.0.1 패키지 프로세스",
+   "ok": true,
+   "detail": {
+    "cdpVersion": "1.1.1",
+    "confirmed": true
+   }
+  },
+  {
+   "name": "S1-8 임시 파일(.part·다운로드한 새 exe·백업) 정리",
+   "ok": true,
+   "detail": {
+    "updates": [
+     "apply-update.json",
+     "apply-update.ps1",
+     "update-helper.log",
+     "updater.log"
+    ],
+    "dir": [
+     "goodseedown-1.1.0-Windows-x64.exe"
+    ]
+   }
+  },
+  {
+   "name": "S2-1 확인창에 받을 용량(변경된 부분만 · 전체) 표시",
+   "ok": true,
+   "detail": "받을 용량: 약 172 KB (변경된 부분만 · 전체 203.3 MB)"
+  },
+  {
+   "name": "S2-2 교체 완료: SHA-256 이 새 exe 와 동일(패치 적용 결과가 전체 파일과 같음)",
+   "ok": true,
+   "detail": {
+    "now": "5bbf11a576ad"
+   }
+  },
+  {
+   "name": "S2-3 요청 로그: 패치만 받고 전체 exe 는 받지 않음",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "S2-4 업데이터 로그: mode=patch·내려받은 바이트 = 패치 크기",
+   "ok": true,
+   "detail": [
+    "2026-11-01T14:59:39.004Z downloaded+verified C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\ue\\data-wkaxx\\updates\\goodseedown-1.1.1-Windows-x64.exe sha256=5bbf11a576ad86214c607d55bfa0e04c1f8bf492b8daf0d7756a49463b694d75 mode=patch downloadedBytes=176000"
+   ]
+  },
+  {
+   "name": "S2-5 새 버전(1.0.1) 재실행 확인",
+   "ok": true
+  },
+  {
+   "name": "S3-1 전송 중 손상된 패치 → 전체 exe 로 자동 폴백해 업데이트 성공",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "S3-2 로그: mode=full-fallback·patchError 기록",
+   "ok": true,
+   "detail": [
+    "2026-11-01T15:00:08.042Z downloaded+verified C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\ue\\data-yv7sj\\updates\\goodseedown-1.1.1-Windows-x64.exe sha256=5bbf11a576ad86214c607d55bfa0e04c1f8bf492b8daf0d7756a49463b694d75 mode=full-fallback downloadedBytes=213315968 patchError=hash-mismatch 다운로드한 파일의 SHA-256 해시가 SHA256SUMS.txt 와 다릅니다."
+   ]
+  },
+  {
+   "name": "S3-3 기준 해시 불일치 → 확인창은 전체 파일 용량으로 표시",
+   "ok": true,
+   "detail": "받을 용량: 약 203.3 MB (전체 파일)"
+  },
+  {
+   "name": "S3-4 패치는 받지 않고 전체만 받아 업데이트 성공",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "S4-1 [나중에] → 교체 없음·앱 계속 사용 가능",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S4-2 [나중에] 뒤 다음 실행에 다시 안내",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S4-3 [이 버전 건너뛰기] → 상태 파일에 기록·교체 없음",
+   "ok": true,
+   "detail": {
+    "skippedVersion": "1.1.1"
+   }
+  },
+  {
+   "name": "S4-4 건너뛴 버전은 다음 실행에서 안내하지 않음(25초 관찰)",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "S5-1 해시가 SHA256SUMS 와 다르면 \"검증하지 못해 업데이트를 중단\" 오류창(내려받은 파일 삭제 안내)",
+   "ok": true,
+   "detail": [
+    "다운로드한 파일을 검증하지 못해 업데이트를 중단했습니다.",
+    "다운로드한 파일의 SHA-256 해시가 SHA256SUMS.txt 와 다릅니다.\n\n내려받은 파일은 삭제했고 현재 버전(1.1.0)을 그대로 사용합니다."
+   ]
+  },
+  {
+   "name": "S5-2 현재 exe 는 그대로·내려받은 파일 남지 않음·앱은 계속 동작",
+   "ok": true,
+   "detail": [
+    "updater.log"
+   ]
+  },
+  {
+   "name": "S6-1 다운로드 진행 중(6% 이상)",
+   "ok": true,
+   "detail": 8.325447464090733
+  },
+  {
+   "name": "S6-2 진행 중인 다운로드가 있으면 경고창(일시정지 후 업데이트 / 취소)",
+   "ok": true,
+   "detail": {
+    "texts": [
+     "진행 중인 다운로드가 있습니다.",
+     "업데이트하려면 앱을 다시 시작해야 합니다. 진행 중인 다운로드는 일시 정지로 저장되며, 새 버전을 열고 [이어받기]를 누르면 이어서 받습니다."
+    ],
+    "buttons": [
+     "일시 정지하고 업데이트",
+     "취소"
+    ]
+   }
+  },
+  {
+   "name": "S6-3 업데이트 교체 완료",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S6-4 진행 중이던 작업이 일시정지로 저장됨(.part 보존)",
+   "ok": true,
+   "detail": [
+    "paused",
+    46
+   ]
+  },
+  {
+   "name": "S6-5 새 버전(1.0.1)에서 목록 복원 — 일시정지 상태·이어받기 안내",
+   "ok": true,
+   "detail": "1.1.1"
+  },
+  {
+   "name": "S6-6 새 버전에서 이어받아 완료(재개 지점>0)·ffprobe 1080p·150초",
+   "ok": true,
+   "detail": {
+    "resumedAt": 18387457,
+    "streams": [
+     {
+      "codec_name": "h264",
+      "height": 1080
+     },
+     {
+      "codec_name": "aac"
+     }
+    ]
+   }
+  },
+  {
+   "name": "S7-1 새 버전이 시작을 보고하지 않으면 도우미가 실패를 기록하고 복원(helper 로그)",
+   "ok": true,
+   "detail": [
+    "2026-11-02T00:04:06 parent wait done alive=False\r",
+    "2026-11-02T00:04:08 verifying downloaded file\r",
+    "2026-11-02T00:04:08 exe replaced\r",
+    "2026-11-02T00:04:23 rollback: old exe restored\r",
+    "2026-11-02T00:04:23 FAILED: new version did not report a successful start; old exe restored\r",
+    ""
+   ]
+  },
+  {
+   "name": "S7-2 이전 exe 로 복원됨(SHA-256 이 원래와 같음)",
+   "ok": true,
+   "detail": {
+    "now": "ffd13d3d50a2",
+    "old": "ffd13d3d50a2"
+   }
+  },
+  {
+   "name": "S7-3 복원 후 재실행된 이전 버전이 \"직전 업데이트를 적용하지 못해 기존 버전으로 복원\" 안내",
+   "ok": true,
+   "detail": [
+    "직전 업데이트(1.1.1)를 적용하지 못해 기존 버전으로 복원했습니다.",
+    "사유: new version did not report a successful start; old exe restored\n현재 버전: 1.1.0"
+   ]
+  },
+  {
+   "name": "S7-4 복원된 앱은 정상 동작(1.1.0)",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S8-1 서버 오류(500) → 시작할 때 조용히 건너뜀(안내창 없음)·앱 정상",
+   "ok": false,
+   "detail": [
+    ""
+   ]
+  },
+  {
+   "name": "S8-2 릴리스에 exe 가 없으면 안내하지 않음(업데이트 불가)",
+   "ok": true,
+   "detail": [
+    "2026-11-01T15:05:16.900Z release 1.1.1 lacks assets",
+    ""
+   ]
+  },
+  {
+   "name": "S8-3 UPDATE_REPO 미설정(저장소 값이 <owner> 자리표시) → 자동 확인을 건너뜀·안내창 없음",
+   "ok": true,
+   "detail": [
+    "2026-11-01T15:05:43.534Z update repo not configured; skipped",
+    ""
+   ]
+  },
+  {
+   "name": "S8-3b 같은 상태에서 수동 확인(설정의 [앱 업데이트 확인]) → \"업데이트 저장소가 아직 설정되지 않았습니다\" 안내",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S9-1 설정 화면에 엔진 버전 표시(설치본)",
+   "ok": true,
+   "detail": "2026.10.26 (설치본)"
+  },
+  {
+   "name": "S9-2 새 엔진 감지 → 확인창(현재·새 엔진 버전·받을 용량·[지금 업데이트][나중에])",
+   "ok": true,
+   "detail": "새 yt-dlp 엔진 2026.10.27 이(가) 있습니다.\n현재 엔진: 2026.10.26\n새 엔진: 2026.10.27\n받을 용량: 약 22.5 MB\n\n엔진은 사이트 변경에 대응하는 다운로드 프로그램(yt-dlp)입니다. 업데이트하면 다운로드가 다시 잘 되는 경우가 많습니다. 내려받"
+  },
+  {
+   "name": "S9-3 [나중에] → 설치 안 함(엔진 폴더 없음·다운로드 요청 없음)",
+   "ok": true,
+   "detail": [
+    "/repos/x/releases/latest",
+    "/repos/x/releases/latest",
+    "/dl/SHA2-256SUMS",
+    "/dl/yt-dlp.exe"
+   ]
+  },
+  {
+   "name": "S9-4 [지금 업데이트] → 해시 검증·실행 시험 후 설치(engine.json 기록)",
+   "ok": true,
+   "detail": {
+    "version": "2026.10.26",
+    "tag": "2026.10.27",
+    "file": "yt-dlp-2026.10.26.exe",
+    "size": 23575744,
+    "sha256": "f5389d3698ecde4ef06f4e6b1ce0294fe9ac1396228c8990b8d3416d6d177a7d",
+    "installedAt": "2026-11-01T15:06:32.857Z",
+    "previous": null
+   }
+  },
+  {
+   "name": "S9-5 앱이 설치된 새 엔진을 사용(번들 아님)",
+   "ok": true,
+   "detail": {
+    "active": "C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\ue\\data-521bb\\engine\\yt-dlp-2026.10.26.exe",
+    "version": "2026.10.26"
+   }
+  },
+  {
+   "name": "S9-6 설치된 새 엔진으로 실제 다운로드 성공(MP3)",
+   "ok": true,
+   "detail": {
+    "s": "completed",
+    "e": null
+   }
+  },
+  {
+   "name": "S9-7 변조된 엔진 → \"엔진을 업데이트하지 못했습니다\"(해시 불일치) 오류창·설치 안 됨",
+   "ok": true,
+   "detail": [
+    "엔진을 업데이트하지 못했습니다.",
+    "내려받은 엔진의 SHA-256 해시가 해시 목록과 다릅니다.\n\n현재 엔진을 그대로 사용합니다."
+   ]
+  },
+  {
+   "name": "시험 후 시험이 띄운 goodseedown 프로세스 정리",
+   "ok": true,
+   "detail": {
+    "before": 0,
+    "after": 0
+   }
+  }
+ ]
+}

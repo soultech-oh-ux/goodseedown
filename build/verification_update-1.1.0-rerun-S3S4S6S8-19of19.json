@@ -1,0 +1,152 @@
+{
+ "when": "2026-11-01T15:12:33.097Z",
+ "old": {
+  "ver": "1.1.0",
+  "sha256": "ffd13d3d50a2fd28ee9585256a48e4d151c945b09d425b1f2223aa3dfdad41dd",
+  "size": 213139968
+ },
+ "new": {
+  "ver": "1.1.1",
+  "sha256": "5bbf11a576ad86214c607d55bfa0e04c1f8bf492b8daf0d7756a49463b694d75",
+  "size": 213139968
+ },
+ "total": 19,
+ "passed": 19,
+ "failed": 0,
+ "results": [
+  {
+   "name": "S3-1 전송 중 손상된 패치 → 전체 exe 로 자동 폴백해 업데이트 성공",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "S3-2 로그: mode=full-fallback·patchError 기록",
+   "ok": true,
+   "detail": [
+    "2026-11-01T15:07:57.318Z downloaded+verified C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\ue\\data-u601u\\updates\\goodseedown-1.1.1-Windows-x64.exe sha256=5bbf11a576ad86214c607d55bfa0e04c1f8bf492b8daf0d7756a49463b694d75 mode=full-fallback downloadedBytes=213315968 patchError=hash-mismatch 다운로드한 파일의 SHA-256 해시가 SHA256SUMS.txt 와 다릅니다."
+   ]
+  },
+  {
+   "name": "S3-3 기준 해시 불일치 → 확인창은 전체 파일 용량으로 표시",
+   "ok": true,
+   "detail": "받을 용량: 약 203.3 MB (전체 파일)"
+  },
+  {
+   "name": "S3-4 패치는 받지 않고 전체만 받아 업데이트 성공",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "S4-1 [나중에] → 교체 없음·앱 계속 사용 가능",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S4-2 [나중에] 뒤 다음 실행에 다시 안내",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S4-3 [이 버전 건너뛰기] → 상태 파일에 기록·교체 없음",
+   "ok": true,
+   "detail": {
+    "skippedVersion": "1.1.1"
+   }
+  },
+  {
+   "name": "S4-4 건너뛴 버전은 다음 실행에서 안내하지 않음(25초 관찰)",
+   "ok": true,
+   "detail": []
+  },
+  {
+   "name": "S6-1 다운로드 진행 중(6% 이상)",
+   "ok": true,
+   "detail": 8.312689919496009
+  },
+  {
+   "name": "S6-2 진행 중인 다운로드가 있으면 경고창(일시정지 후 업데이트 / 취소)",
+   "ok": true,
+   "detail": {
+    "texts": [
+     "진행 중인 다운로드가 있습니다.",
+     "업데이트하려면 앱을 다시 시작해야 합니다. 진행 중인 다운로드는 일시 정지로 저장되며, 새 버전을 열고 [이어받기]를 누르면 이어서 받습니다."
+    ],
+    "buttons": [
+     "일시 정지하고 업데이트",
+     "취소"
+    ]
+   }
+  },
+  {
+   "name": "S6-3 업데이트 교체 완료",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S6-4 진행 중이던 작업이 일시정지로 저장됨(.part 보존)",
+   "ok": true,
+   "detail": [
+    "paused",
+    49
+   ]
+  },
+  {
+   "name": "S6-5 새 버전(1.0.1)에서 목록 복원 — 일시정지 상태·이어받기 안내",
+   "ok": true,
+   "detail": "1.1.1"
+  },
+  {
+   "name": "S6-6 새 버전에서 이어받아 완료(재개 지점>0)·ffprobe 1080p·150초",
+   "ok": true,
+   "detail": {
+    "resumedAt": 19632805,
+    "streams": [
+     {
+      "codec_name": "h264",
+      "height": 1080
+     },
+     {
+      "codec_name": "aac"
+     }
+    ]
+   }
+  },
+  {
+   "name": "S8-1 서버 오류(500) → 시작할 때 조용히 건너뜀(안내창 없음)·앱 정상",
+   "ok": true,
+   "detail": [
+    "2026-11-01T15:11:17.762Z check failed: http 서버 응답 오류(HTTP 500)",
+    ""
+   ]
+  },
+  {
+   "name": "S8-2 릴리스에 exe 가 없으면 안내하지 않음(업데이트 불가)",
+   "ok": true,
+   "detail": [
+    "2026-11-01T15:11:43.928Z release 1.1.1 lacks assets",
+    ""
+   ]
+  },
+  {
+   "name": "S8-3 UPDATE_REPO 미설정(저장소 값이 <owner> 자리표시) → 자동 확인을 건너뜀·안내창 없음",
+   "ok": true,
+   "detail": [
+    "2026-11-01T15:12:08.851Z update repo not configured; skipped",
+    ""
+   ]
+  },
+  {
+   "name": "S8-3b 같은 상태에서 수동 확인(설정의 [앱 업데이트 확인]) → \"업데이트 저장소가 아직 설정되지 않았습니다\" 안내",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "시험 후 시험이 띄운 goodseedown 프로세스 정리",
+   "ok": true,
+   "detail": {
+    "before": 0,
+    "after": 0
+   }
+  }
+ ]
+}

@@ -1,0 +1,109 @@
+{
+ "when": "2026-10-31T23:56:28.359Z",
+ "old": {
+  "ver": "1.0.0",
+  "sha256": "8f696d0390d73a49155fe595c9c29470f6c144bba5b9bf341f8ca0ff523df156",
+  "size": 213135360
+ },
+ "new": {
+  "ver": "1.0.1",
+  "sha256": "8291241e5c6e693981c1b26aee9c4341d7d6d347c073f2c6033ec232917d3415",
+  "size": 213135360
+ },
+ "total": 11,
+ "passed": 11,
+ "failed": 0,
+ "results": [
+  {
+   "name": "S1-0 1.0.0 앱 기동(창 준비)·현재 버전 1.0.0",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "S1-1 새 버전 감지 → 한국어 확인창(새·현재 버전·릴리스 노트·3버튼)",
+   "ok": true,
+   "detail": {
+    "title": "goodseedown 업데이트",
+    "buttons": [
+     "지금 업데이트",
+     "나중에",
+     "이 버전 건너뛰기"
+    ]
+   }
+  },
+  {
+   "name": "S1-1b 패치 없는 릴리스: 확인창에 받을 용량(전체 파일) 표시",
+   "ok": true,
+   "detail": "받을 용량: 약 203.3 MB (전체 파일)"
+  },
+  {
+   "name": "S1-2 [지금 업데이트] 클릭",
+   "ok": true
+  },
+  {
+   "name": "S1-3 교체 완료: 포터블 exe 의 SHA-256 이 새 exe 와 동일",
+   "ok": true,
+   "detail": {
+    "now": "8291241e5c6e",
+    "new": "8291241e5c6e"
+   }
+  },
+  {
+   "name": "S1-4 요청 로그: 새 exe·SHA256SUMS 를 받음, 패치 요청 없음",
+   "ok": true,
+   "detail": [
+    "/repos/x/releases/latest",
+    "/dl/SHA256SUMS.txt",
+    "/dl/goodseedown-1.0.1-Windows-x64.exe"
+   ]
+  },
+  {
+   "name": "S1-5 업데이터 로그에 방식 기록(mode=full)",
+   "ok": true,
+   "detail": [
+    "2026-10-31T23:56:15.143Z downloaded+verified C:\\Users\\USER\\Desktop\\cysjavis\\goodseedown\\build\\work\\ue\\data-8bd12\\updates\\goodseedown-1.0.1-Windows-x64.exe sha256=8291241e5c6e693981c1b26aee9c4341d7d6d347c073f2c6033ec232917d3415 mode=full downloadedBytes=213135360"
+   ]
+  },
+  {
+   "name": "S1-6 새 버전 재실행·시작 확인(helper \"update complete\")",
+   "ok": true,
+   "detail": [
+    "2026-11-01T08:56:17 verifying downloaded file\r",
+    "2026-11-01T08:56:19 exe replaced\r",
+    "2026-11-01T08:56:20 update complete\r",
+    ""
+   ]
+  },
+  {
+   "name": "S1-7 재실행된 앱이 실제로 새 버전(1.0.1) — 화면 연결 또는 앱 로그(update to 1.0.1 confirmed)+1.0.1 패키지 프로세스",
+   "ok": true,
+   "detail": {
+    "cdpVersion": "1.0.1",
+    "confirmed": true
+   }
+  },
+  {
+   "name": "S1-8 임시 파일(.part·다운로드한 새 exe·백업) 정리",
+   "ok": true,
+   "detail": {
+    "updates": [
+     "apply-update.json",
+     "apply-update.ps1",
+     "update-helper.log",
+     "updater.log"
+    ],
+    "dir": [
+     "goodseedown-1.0.0-Windows-x64.exe"
+    ]
+   }
+  },
+  {
+   "name": "시험 후 시험이 띄운 goodseedown 프로세스 정리",
+   "ok": true,
+   "detail": {
+    "before": 0,
+    "after": 0
+   }
+  }
+ ]
+}

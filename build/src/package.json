@@ -1,0 +1,11 @@
+{
+  "name": "goodseedown",
+  "version": "1.1.0",
+  "private": true,
+  "description": "goodseedown — 동영상 다운로더 (goodseed AI LAB)",
+  "appId": "kr.goodseed.down",
+  "productName": "goodseedown",
+  "main": "desktop/main.cjs",
+  "author": "굿씨드AI연구소(goodseed AI LAB) 오경근 박사",
+  "license": "GPL-3.0-or-later"
+}

@@ -1,0 +1,39 @@
+# goodseedown — 소스 저장소에 올리지 않는 것 (빌드 산출물·바이너리·시험 미디어)
+# 배포 파일(exe·패치·SHA256SUMS·PATCHES.json)은 저장소가 아니라 GitHub 릴리스 자산으로만 올린다.
+
+# 빌드·배포 산출물
+/dist/
+/release/out/
+/build/bundle/
+/build/work/
+/build/launcher/
+/build/electron-base/
+/build/verification-history/
+
+# 외부 도구 바이너리와 설치본(라이선스·출처 문서(.txt/.md)만 저장소에 둔다 — 받는 곳은 THIRD-PARTY.md)
+/build/tools/**/*.exe
+/build/tools/asar/node_modules/
+node_modules/
+
+# 바이너리·압축·패치·시험 미디어
+*.exe
+*.dll
+*.zip
+*.patch
+*.asar
+*.mp3
+*.mp4
+*.mkv
+*.webm
+*.m4a
+*.ogg
+*.opus
+*.srt
+*.vtt
+*.part
+*.ytdl
+.goodseedown-tmp/
+
+# 작업 중 임시 파일
+*.log
+Thumbs.db

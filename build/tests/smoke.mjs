@@ -1,0 +1,20 @@
+// 기동 스모크: 포터블 exe 를 격리된 데이터 폴더로 띄워 창 제목·번들 도구·엔진 버전을 확인하고 정상 종료되는지 본다.
+import { spawn, spawnSync } from 'node:child_process';
+import fs from 'node:fs'; import path from 'node:path'; import crypto from 'node:crypto'; import { fileURLToPath } from 'node:url';
+const here = path.dirname(fileURLToPath(import.meta.url)); const b = path.resolve(here, '..');
+const exe = process.argv[2] || path.join(b, '..', 'dist', 'goodseedown-1.1.0-Windows-x64.exe');
+const procs = () => { const r = spawnSync('powershell.exe', ['-NoProfile', '-Command', "@(Get-CimInstance Win32_Process -Filter \"Name='goodseedown.exe'\").Count"], { encoding: 'utf8' }); return Number(r.stdout.trim() || 0); };
+const out = path.join(b, 'work', 'smoke'); fs.rmSync(out, { recursive: true, force: true }); fs.mkdirSync(out, { recursive: true });
+const rep = path.join(out, 'report.json');
+const before = procs();
+const prep = spawnSync(exe, ['--prepare-only'], { timeout: 180000 });
+console.log('prepare-only exit', prep.status);
+const child = spawn(exe, [], { env: { ...process.env, GOODSEEDOWN_UPDATE_API: 'http://127.0.0.1:9/none', GOODSEEDOWN_SMOKE_TEST: rep, GOODSEEDOWN_DATA_ROOT: path.join(out, 'data') }, stdio: 'ignore' });
+const t0 = Date.now(); while (!fs.existsSync(rep) && Date.now() - t0 < 90000) await new Promise(r => setTimeout(r, 500));
+await new Promise(r => setTimeout(r, 4000));
+const r = fs.existsSync(rep) ? JSON.parse(fs.readFileSync(rep, 'utf8')) : null;
+console.log(JSON.stringify(r, null, 1));
+console.log('goodseedown processes before/after:', before, procs());
+const sha = crypto.createHash('sha256').update(fs.readFileSync(exe)).digest('hex');
+console.log('exe sha256', sha, fs.statSync(exe).size);
+process.exit(r && r.ready ? 0 : 1);

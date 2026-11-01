@@ -1,0 +1,13 @@
+{
+    "schema":  1,
+    "version":  "1.0.1",
+    "patches":  [
+                    {
+                        "from":  "1.0.0",
+                        "fromSha256":  "8f696d0390d73a49155fe595c9c29470f6c144bba5b9bf341f8ca0ff523df156",
+                        "name":  "goodseedown-1.0.1-from-1.0.0.patch",
+                        "size":  184304,
+                        "sha256":  "11b873d9fd36dfe3fe7c9113fcd2471594a09207bccaf0e30a20bd8273f8f704"
+                    }
+                ]
+}

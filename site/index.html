@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>goodseedown 다운로드</title>
+<meta name="description" content="goodseedown — 링크만 붙여넣으면 받는 Windows용 동영상·MP3 다운로더. 굿씨드AI연구소(goodseed AI LAB).">
+<meta property="og:title" content="goodseedown — 동영상·MP3 다운로더">
+<meta property="og:description" content="링크만 붙여넣으면 동영상과 MP3를 받는 Windows 앱.">
+<meta property="og:image" content="icon.png">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6faf6;
+    --bg-alt: #ecf4ed;
+    --surface: #ffffff;
+    --text: #15231a;
+    --muted: #55665a;
+    --border: #d6e4d9;
+    --accent: #2f8f4e;
+    --accent-strong: #1f6b38;
+    --accent-soft: #dff0e3;
+    --on-accent: #ffffff;
+    --warn-bg: #fff7e6;
+    --warn-border: #f0d49a;
+    --warn-text: #6b4a0b;
+    --shadow: 0 10px 30px rgba(21, 60, 33, .10);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1611;
+      --bg-alt: #132019;
+      --surface: #17241c;
+      --text: #e6f1e8;
+      --muted: #9fb3a5;
+      --border: #284032;
+      --accent: #5cc27a;
+      --accent-strong: #7fd697;
+      --accent-soft: #1d3626;
+      --on-accent: #0b1a10;
+      --warn-bg: #2a2212;
+      --warn-border: #5a4720;
+      --warn-text: #f0d79e;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+      color-scheme: dark;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans KR", system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    line-height: 1.65;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  a { color: var(--accent-strong); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+
+  header.top { border-bottom: 1px solid var(--border); background: var(--surface); }
+  header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.1rem; color: var(--text); text-decoration: none; }
+  .brand img { width: 32px; height: 32px; border-radius: 8px; }
+  .top-link { font-size: .9rem; color: var(--muted); text-decoration: none; white-space: nowrap; }
+  .top-link:hover { color: var(--accent-strong); }
+
+  .hero {
+    padding: 64px 0 56px;
+    background: radial-gradient(1200px 400px at 50% -10%, var(--accent-soft), transparent 70%);
+    text-align: center;
+  }
+  .hero-logo { width: 112px; height: 112px; border-radius: 26px; box-shadow: var(--shadow); }
+  .hero h1 { margin: 20px 0 6px; font-size: clamp(2rem, 6vw, 3.2rem); font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+  .hero .tagline { margin: 0 0 6px; font-size: clamp(1.05rem, 3.4vw, 1.3rem); font-weight: 500; }
+  .hero .sub { margin: 0 auto 28px; color: var(--muted); max-width: 520px; }
+  .btn-dl {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    background: var(--accent); color: var(--on-accent);
+    font-size: 1.15rem; font-weight: 700; text-decoration: none;
+    padding: 16px 32px; border-radius: 14px; box-shadow: var(--shadow);
+    max-width: 100%; transition: background .15s, transform .15s;
+  }
+  .btn-dl:hover { background: var(--accent-strong); transform: translateY(-1px); }
+  .btn-dl:focus-visible { outline: 3px solid var(--accent-strong); outline-offset: 3px; }
+  .btn-dl svg { flex: none; }
+  .dl-meta { margin: 12px 0 0; color: var(--muted); font-size: .92rem; min-height: 1.5em; }
+  .dl-links { margin: 6px 0 0; font-size: .9rem; }
+  .req-badge {
+    display: inline-block; margin-top: 18px; padding: 4px 12px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent-strong); font-size: .85rem; font-weight: 500;
+  }
+
+  section { padding: 56px 0; }
+  section.alt { background: var(--bg-alt); }
+  h2 { font-size: clamp(1.4rem, 4vw, 1.8rem); margin: 0 0 8px; letter-spacing: -.01em; }
+  .section-lead { color: var(--muted); margin: 0 0 28px; }
+
+  .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 16px; list-style: none; padding: 0; margin: 0; }
+  .feature { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+  .feature .ic { width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-strong); display: grid; place-items: center; margin-bottom: 12px; }
+  .feature h3 { margin: 0 0 4px; font-size: 1.05rem; }
+  .feature p { margin: 0; color: var(--muted); font-size: .95rem; }
+
+  .note-plain {
+    margin: 20px 0 0; padding: 14px 18px; border-radius: 12px;
+    background: var(--surface); border: 1px dashed var(--accent); color: var(--text); font-size: .95rem;
+  }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+  .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .card p, .card li { color: var(--muted); font-size: .95rem; }
+  .card p { margin: 0; }
+  .card ul { margin: 0; padding-left: 1.2em; }
+  .notice { background: var(--warn-bg); border-color: var(--warn-border); }
+  .notice h3, .notice p, .notice li { color: var(--warn-text); }
+  .kbd { display: inline-block; padding: 0 6px; border: 1px solid currentColor; border-radius: 6px; font-size: .88em; }
+
+  footer { border-top: 1px solid var(--border); padding: 28px 0 40px; color: var(--muted); font-size: .9rem; text-align: center; }
+  footer p { margin: 4px 0; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="icon.png" alt="" width="32" height="32">goodseedown</a>
+    <a class="top-link" href="https://github.com/soultech-oh-ux/goodseedown" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <img class="hero-logo" src="icon.png" alt="goodseedown 아이콘" width="112" height="112">
+      <h1>goodseedown</h1>
+      <p class="tagline">동영상·MP3 다운로더</p>
+      <p class="sub">링크를 붙여넣으면 영상과 음악을 내 PC에 저장합니다.</p>
+      <a id="dl-btn" class="btn-dl" href="https://github.com/soultech-oh-ux/goodseedown/releases/latest" rel="noopener">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+        <span>Windows용 다운로드</span>
+      </a>
+      <p id="dl-meta" class="dl-meta" aria-live="polite">최신 버전 정보를 불러오는 중…</p>
+      <p class="dl-links"><a href="https://github.com/soultech-oh-ux/goodseedown/releases" target="_blank" rel="noopener">모든 버전 보기</a></p>
+      <span class="req-badge">Windows 10/11 64비트</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="wrap">
+      <h2>주요 기능</h2>
+      <p class="section-lead">필요한 것만 담았습니다.</p>
+      <ul class="features">
+        <li class="feature">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></div>
+          <h3>링크 붙여넣기로 영상 다운로드</h3>
+          <p>화질 최대 8K / 4K / 1080p / 720p 선택, MP4·MKV로 저장합니다.</p>
+        </li>
+        <li class="feature">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+          <h3>MP3 전용 화면</h3>
+          <p>128~320kbps 음질 선택, 곡 정보와 앨범아트를 함께 저장합니다.</p>
+        </li>
+        <li class="feature">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h13"/><path d="M3 12h13"/><path d="M3 18h9"/><path d="M17 15l4 3-4 3z"/></svg></div>
+          <h3>재생목록·채널 일괄 다운로드</h3>
+          <p>재생목록이나 채널 링크 하나로 여러 영상을 한 번에 받습니다.</p>
+        </li>
+        <li class="feature">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h4"/><path d="M13 15h4"/><path d="M7 11h10"/></svg></div>
+          <h3>자막</h3>
+          <p>자막을 SRT 파일로 저장하거나 영상에 넣을 수 있습니다.</p>
+        </li>
+        <li class="feature">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></div>
+          <h3>스마트 모드</h3>
+          <p>복잡한 선택 없이 원클릭으로 바로 받습니다.</p>
+        </li>
+        <li class="feature">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></div>
+          <h3>일시정지·이어받기</h3>
+          <p>다운로드를 멈췄다가 받던 곳부터 다시 이어서 받습니다.</p>
+        </li>
+        <li class="feature">
+          <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></div>
+          <h3>자동 업데이트</h3>
+          <p>사용자 확인 후, 바뀐 부분만 받아 업데이트합니다.</p>
+        </li>
+      </ul>
+      <p class="note-plain"><strong>자동으로 다운로드하지 않습니다.</strong> 사용자가 붙여넣은 링크만 받습니다.</p>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <h2>설치 전에 확인하세요</h2>
+      <p class="section-lead">시스템 요구사항과 안내 사항입니다.</p>
+      <div class="grid2">
+        <div class="card">
+          <h3>시스템 요구사항</h3>
+          <ul>
+            <li>Windows 10 / 11 64비트</li>
+          </ul>
+        </div>
+        <div class="card notice" role="note">
+          <h3>처음 실행할 때</h3>
+          <p>코드 서명이 없어 처음 실행 시 Windows SmartScreen 경고가 뜰 수 있습니다. 이때 <span class="kbd">추가 정보</span> → <span class="kbd">실행</span>을 누르세요.</p>
+        </div>
+        <div class="card notice" role="note">
+          <h3>저작권 안내</h3>
+          <p>저작권이 있는 콘텐츠는 권리자의 허락을 받았거나 개인적 이용 범위에서만 다운로드하세요. DRM 보호 콘텐츠는 지원하지 않습니다.</p>
+        </div>
+        <div class="card">
+          <h3>라이선스</h3>
+          <p>GPL-3.0-or-later 오픈소스입니다. 소스 코드: <a href="https://github.com/soultech-oh-ux/goodseedown" target="_blank" rel="noopener">github.com/soultech-oh-ux/goodseedown</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 굿씨드AI연구소(goodseed AI LAB) <a href="https://ohkyoungkeun-namecard.vercel.app/" target="_blank" rel="noopener">오경근 박사</a></p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var FALLBACK = "https://github.com/soultech-oh-ux/goodseedown/releases/latest";
+  var API = "https://api.github.com/repos/soultech-oh-ux/goodseedown/releases/latest";
+  var PATTERN = /^goodseedown-.*-Windows-x64\.exe$/;
+  var btn = document.getElementById("dl-btn");
+  var meta = document.getElementById("dl-meta");
+
+  function fallback() {
+    btn.href = FALLBACK;
+    btn.target = "_blank";
+    meta.textContent = "GitHub 릴리스 페이지에서 최신 버전을 받습니다.";
+  }
+
+  if (!window.fetch) { fallback(); return; }
+
+  var ctrl = window.AbortController ? new AbortController() : null;
+  var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 8000);
+
+  fetch(API, { headers: { "Accept": "application/vnd.github+json" }, signal: ctrl ? ctrl.signal : undefined })
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function (rel) {
+      clearTimeout(timer);
+      var assets = (rel && rel.assets) || [];
+      var a = null;
+      for (var i = 0; i < assets.length; i++) {
+        if (assets[i] && PATTERN.test(assets[i].name || "")) { a = assets[i]; break; }
+      }
+      if (!a || !a.browser_download_url) throw new Error("asset not found");
+      btn.href = a.browser_download_url;
+      btn.removeAttribute("target");
+      var ver = rel.tag_name || rel.name || "";
+      var mb = typeof a.size === "number" ? (a.size / 1048576).toFixed(1) + " MB" : "";
+      meta.textContent = [ver ? "최신 버전 " + ver : "", mb].filter(Boolean).join(" · ");
+    })
+    .catch(function () { clearTimeout(timer); fallback(); });
+})();
+</script>
+</body>
+</html>
