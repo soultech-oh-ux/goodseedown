@@ -1,0 +1,16 @@
+# 서명 키·비밀번호는 절대 커밋하지 않는다
+keystore/
+keystore.properties
+*.jks
+*.keystore
+# 빌드 산출물·IDE
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+captures/
+.cxx/
+# 에뮬레이터 시험 산출물
+test-out/
