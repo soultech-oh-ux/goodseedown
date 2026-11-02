@@ -34,6 +34,8 @@ data class DlJob(
     val saved: List<SavedFile> = emptyList(),
     val error: String? = null,
     val warning: String? = null,
+    val log: String = "",        // 실패 카드에 보여 줄 yt-dlp 원문 끝부분
+    val report: String = "",     // [오류 내용 복사]로 복사할 전체 진단 글(기기·버전·옵션·원문)
 )
 
 /** 마지막으로 고른 값을 기억한다(값만 기억 — 자동으로 받기를 시작하지 않는다). */

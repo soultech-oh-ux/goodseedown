@@ -72,3 +72,60 @@ gradlew.bat testDebugUnitTest assembleRelease
 %LOCALAPPDATA%\Android\Sdk\build-tools\35.0.0\apksigner.bat verify --verbose app\build\outputs\apk\release\app-release.apk
 ```
 (서명하려면 `android\keystore.properties` 가 있어야 합니다.)
+
+---
+
+# 1.0.1 — 실기기 MP3 320k 실패 조사·수정 (2026-11-02)
+
+지시: 오너 폰에서 MP3 320k 받기가 실패하고 "…[엔진 업데이트] 후 다시 시도해 보세요"가 뜸(오너는 엔진 업데이트 후에도 실패). 이 문구는 1.0.0 의 두 곳에서 나옴: ①`DownloadService.kt` "받은 파일을 찾지 못했습니다"(저장할 파일 0건) ②`Engine.kt` `friendlyError` 의 else(다른 어떤 오류도 아닐 때).
+
+## A. 결론 먼저 (정직하게)
+
+- **오너 폰의 실패 원인은 특정하지 못했습니다.** 1.0.0 은 yt-dlp 오류 원문을 화면에 남기지 않았고, 실패한 링크·원문을 받지 못했으며, 이 PC 에서는 기기 실행이 불가능합니다. 아래는 PC 재현에서 **확인된 사실**과 **남은 후보**입니다.
+- **PC 에서 앱과 같은 인자로 재현한 MP3 320k 는 최신 yt-dlp(2026.10.26) 로 성공**했습니다(JS 런타임 없이도). 따라서 "최신 yt-dlp 가 JS 런타임이 없으면 MP3 추출이 막힌다"는 유력 가설은 **이 PC·이 영상에서는 사실이 아니었습니다.**
+- 오너 폰 실패는 PC 와 다른 조건(폰의 네트워크/IP, 폰용 내장 파이썬·ffmpeg·quickjs)에서 생긴 것으로 보입니다. 이번 1.0.1 은 **다음 실패 때 원인이 화면에 그대로 보이게** 하는 것(요구 c)을 핵심으로 하고, 근거가 확인된 부분만 고쳤습니다.
+
+## B. PC 재현 기록 (모두 이번에 실제 실행)
+
+공통: 대상 Caminandes 3(Blender CC-BY 공개 영상, `SkVqJ1SGeL0`), 앱이 만드는 인자 그대로(`--no-cache-dir --windows-filenames --no-mtime --retries 10 --fragment-retries 10 --socket-timeout 30 --no-playlist -N 4 -f bestaudio/best -x --audio-format mp3 --audio-quality 320K --embed-metadata --embed-thumbnail --convert-thumbnails jpg --ffmpeg-location …`), PC 의 Python 3.12.10(앱 내장 파이썬도 3.12 — `libpython.zip.so` 안 `python3.12` 확인), 앱이 쓰는 것과 같은 zip 앱 형태의 yt-dlp.
+
+| 번호 | 조건 | 결과 |
+|---|---|---|
+| R1 | **최신 stable 2026.10.26**, JS 런타임 없음(경고만 출력: "No supported JavaScript runtime…") | **exit 0, `Caminandes 3： Llamigos.mp3` 6,107,291바이트 생성** — 320k 성공 |
+| R2 | 앱에 처음부터 들어 있던 **내장판 2025.11.12**(라이브러리 `library-0.18.1.aar` 의 `res/raw/ytdlp` 에서 꺼냄), 같은 인자 | **exit 1** — `WARNING: Your yt-dlp version (2025.11.12) is older than 90 days!`, web/web_safari "SABR" 경고, **`ERROR: unable to download video data: HTTP Error 403: Forbidden`**. 결과물은 앨범 사진 jpg 뿐, mp3 없음 |
+| R3 | 최신판 + `--ffmpeg-location` 을 **파일 하나(`libffmpeg.so` 이름, ffprobe 없음)** 로 지정(폰에서 라이브러리가 하는 방식 재현) | **성공**, mp3 6,107,291바이트 |
+| R4 | 최신판 + `--js-runtimes quickjs:/data/nope/libqjs.so`(존재하지 않는 경로) | **성공**(경고만) — 잘못된 JS 런타임 경로가 있어도 이 영상은 받아짐 |
+| R5 | 최신판 `-F`(형식 목록)로 오디오 형식 존재 확인: Sintel(`eRsGyueVLvQ`), `gdZLi9oWNZg`, `dQw4w9WgXcQ` 각각 JS 런타임 **없음/node 있음** 비교 | 세 영상 모두 두 조건에서 **같은 오디오 형식 목록**(m4a 139/140, opus 249/250/251 등). 목록만 조회했고 받지 않았음 |
+
+이 표에서 **사실로 확인된 것**:
+1. 이 앱에 들어 있는 **내장 엔진(2025.11.12)은 지금 YouTube 에서 403 으로 실패**합니다(R2). 즉 엔진을 업데이트하지 않았거나 업데이트가 적용되지 않았다면 정확히 이런 실패가 납니다. 반대로 **[엔진 초기화](내장판으로 되돌리기)는 지금 시점에서는 해로울 수 있습니다**(되돌리면 403 엔진). 그래서 버튼 설명에 "업데이트 후 더 안 될 때만 쓰세요"를 적었습니다.
+2. **최신 yt-dlp + JS 런타임 없음 = 실패**라는 가설은 R1·R5 로 **기각**(이 영상들 기준).
+3. 앱 인자·`--ffmpeg-location` 파일 지정 방식(R3)·mp3 변환·태그·앨범아트 단계는 PC 에서 이상 없음.
+
+**남은 후보(근거 수준 표시)**
+- (실제 보고 있음) 폰/모바일 IP 에서 유튜브가 막는 경우. 같은 주 JunkFood02/Seal 이슈(공개 GitHub): #2678 `Precondition check failed … HTTP Error 400 … ERROR: Please sign in`, #2674 `Sign in to confirm you're not a bot`, #2681 `This video is not available` — 모두 최신 yt-dlp(2026.10.2x) 사용 중이며, **1.0.0 의 `friendlyError` 는 이 중 "Please sign in"·400 을 알아보지 못해 else("엔진 업데이트 후 다시 시도")로 떨어졌을 것**입니다. 오너 증상(문구)과 정합하지만 오너 폰의 실제 원문을 못 봤으므로 **확정 아님**.
+- (미확인) 폰용 quickjs 가 yt-dlp 와 맞지 않는 경우, 폰용 ffmpeg 의 MP3 인코더·썸네일 변환 문제, 엔진 파일 실행 권한 문제. PC 에서 재현 불가, 기기 실행 불가.
+- ①(저장 0건) 경로: PC 에서 mp3 는 `.mp3` 확장자로 생겨 `saveToDownloads` 수집 조건(mp4·mkv·webm·mp3·m4a·srt)과 어긋나지 않음을 R1 결과로 확인. 이 경로가 났다면 폰에서 yt-dlp 가 오류 없이 끝났는데 파일이 없다는 뜻이라 원문이 필요합니다 → 아래 수정으로 작업 폴더에 남은 파일 목록까지 진단 글에 담습니다.
+
+## C. 1.0.1 에서 바꾼 것
+
+1. **실패 카드에 원인 노출(요구 c)**: yt-dlp 오류 원문(stderr 끝 8줄, 진행률 줄 제외)을 카드에 그대로 표시, [오류 내용 복사] 버튼 추가. 복사되는 진단 글에는 앱 버전·기기 모델·안드로이드/API·ABI·**실제 yt-dlp 버전과 내장/업데이트 구분**·받기 옵션·주소·오류 원문 30줄·진행 로그 20줄·작업 폴더에 남은 파일 목록이 들어 있습니다. "저장할 파일 0건"(①)일 때도 같은 진단이 붙고, 요약 문구는 "받기는 끝났다고 나왔지만 저장할 파일이 없습니다."로 바꿨습니다.
+2. **문구 정정**: else 문구에서 "엔진 업데이트 후 다시 시도"를 빼고 "아래 오류 원문을 확인하고 [오류 내용 복사]로 전달해 주세요"로 바꿈. 이미 업데이트한 사용자에게 같은 말을 되풀이하지 않기 위함. `Please sign in`, `HTTP Error 400/Precondition check failed`, `HTTP Error 403`, `Requested format is not available`, `Cannot run program`(엔진 실행 불가)를 각각 알아보게 추가(근거: B 의 R2 와 Seal 이슈 원문). `Requested format is not available` 가 "영상 없음"으로 잘못 분류되지 않도록 순서 조정(단위 시험으로 확인).
+3. **엔진 버전 표시를 실제 파일 기준으로**: 1.0.0 은 업데이트 전에 "내장 버전"이라고만 보였습니다. 이제 실행되는 yt-dlp 파일 안의 `yt_dlp/version.py` 를 읽어 `2025.11.12 (앱에 들어 있던 판)` / `2026.10.26 (업데이트한 판)` 처럼 엔진 카드·정보 화면·진단 글에 표시합니다. 실제 yt-dlp zip 앱(셔뱅 23바이트가 앞에 붙은 형태) 두 개로 버전 읽기를 단위 시험했습니다.
+4. **[엔진 초기화] 버튼**: 업데이트한 yt-dlp 를 지우고 내장판으로 되돌림(받는 중에는 비활성). B-1 의 이유로 설명문에 주의를 적음.
+5. **용량**: arm64-v8a 만 포함(x86_64 제외). 138,421,968 → **80,097,465바이트**(약 42% 감소).
+6. 버전 `versionCode 2` / `versionName 1.0.1`, **같은 키**로 서명.
+7. (오너 추가 지시) **메인 화면 제목 `goodseedown` 바로 아래에 `굿씨드AI연구소`** 부제를 굵게 표시. **정보 화면**에서 GitHub 주소·긴 GPL 설명·'함께 쓰는 오픈소스' 목록·GPL 웹 버튼을 뺐고, 화면 맨 아래에 작은 회색 글씨 `오픈소스 고지` 한 줄만 두었습니다. 누르면 별도 화면에서 GPL-3.0 안내문 + 구성요소 목록(주소 포함) + GPL-3.0 전문이 나옵니다. 오경근 박사 표기·소개 페이지 링크·사용 안내는 그대로입니다.
+
+## D. 1.0.1 검증 결과
+
+- 단위 시험 **10/10 통과**(1.0.0 의 5 + 오류 안내 분류·진행률 줄 제거·실제 zip 앱 버전 읽기·깨진 파일은 null).
+- 산출: `dist\goodseedown-android-1.0.1.apk` **80,097,465바이트**, SHA-256 `4712ac06dd01716afebdd04ef233562d4b4fb3c8693b0d3a9c85750465bd17c3`(`.sha256` 동봉).
+- `apksigner verify` 통과(v2). 서명자 인증서 SHA-256 `ffe38ced0639ef34fa2a43d33d6322c8f4ecc25f2e54673bb6771c1d49ab7880` = 1.0.0 과 **동일**(1.0.0 apk 로도 재확인) → 1.0.0 위에 덮어 설치(업데이트) 가능. `aapt2`: versionCode 2, versionName 1.0.1, minSdk 29, native-code `arm64-v8a` 만.
+- 1.0.0 의 `dist\goodseedown-android-1.0.0.apk` 는 그대로 보존했습니다.
+
+## E. 한계
+
+- **기기에서 실행해 보지 못했습니다**(에뮬레이터 불가 사유 위와 동일). 새 실패 카드·복사 버튼·부제·정보/고지 화면·엔진 초기화·엔진 버전 표시는 컴파일과 단위 시험만 거쳤고 화면으로는 못 봤습니다.
+- 오너 폰 실패의 **근본 원인은 미특정**입니다. 1.0.1 로 설치해 같은 MP3 를 다시 받아 보고, 실패하면 카드의 [오류 내용 복사] 내용을 받으면 특정할 수 있습니다.
+- 수정 인자(자동 재시도·player_client 지정 등)는 넣지 않았습니다 — PC 에서 실패가 재현되지 않아 효과를 뒷받침할 근거가 없습니다.

@@ -110,27 +110,98 @@ object Engine {
         return out
     }
 
-    /** yt-dlp 오류 글을 한국어 안내로 바꾼다(원문 끝줄은 뒤에 붙인다). */
+    // ---- 받기 엔진(yt-dlp) 버전·초기화 ----
+
+    private const val YTDLP_PREFS = "youtubedl-android"   // 라이브러리가 업데이트한 버전을 적어 두는 곳
+
+    /** 지금 실제로 실행되는 yt-dlp 파일(내장판 또는 [엔진 업데이트]로 바뀐 판). */
+    fun ytdlpFile(ctx: Context): File =
+        File(File(File(ctx.noBackupFilesDir, "youtubedl-android"), "yt-dlp"), "yt-dlp")
+
+    /** yt-dlp 파일(zip 앱) 안의 yt_dlp/version.py 에서 실제 버전을 읽는다. 못 읽으면 null. */
+    fun readYtdlpVersion(f: File): String? = try {
+        java.util.zip.ZipFile(f).use { z ->
+            val e = z.getEntry("yt_dlp/version.py") ?: return@use null
+            val text = z.getInputStream(e).bufferedReader().use { it.readText() }
+            Regex("""__version__\s*=\s*'([^']+)'""").find(text)?.groupValues?.get(1)
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    fun isEngineUpdated(ctx: Context): Boolean =
+        !ctx.getSharedPreferences(YTDLP_PREFS, Context.MODE_PRIVATE).getString("dlpVersion", null).isNullOrEmpty()
+
+    fun engineLabel(ctx: Context): String {
+        val v = readYtdlpVersion(ytdlpFile(ctx)) ?: "알 수 없음"
+        return v + if (isEngineUpdated(ctx)) " (업데이트한 판)" else " (앱에 들어 있던 판)"
+    }
+
+    /** [엔진 초기화]: 업데이트한 yt-dlp 를 지우고 앱에 들어 있던 판으로 되돌린다. 되돌린 버전을 돌려준다. */
+    fun resetEngine(ctx: Context): String? {
+        val dir = ytdlpFile(ctx).parentFile!!
+        dir.deleteRecursively()
+        com.yausername.youtubedl_android.YoutubeDL.init_ytdlp(ctx, dir)
+        ctx.getSharedPreferences(YTDLP_PREFS, Context.MODE_PRIVATE).edit().remove("dlpVersion").remove("dlpVersionName").apply()
+        return readYtdlpVersion(ytdlpFile(ctx))
+    }
+
+    // ---- 오류 안내·진단 ----
+
+    /** 진행률 줄은 빼고, 비어 있지 않은 마지막 n 줄만 남긴다. */
+    fun tailLines(text: String?, n: Int): List<String> =
+        (text ?: "").lineSequence().map { it.trimEnd() }
+            .filter { it.isNotBlank() && !it.trimStart().matches(Regex("""\[download]\s+[\d.]+%.*""")) }
+            .map { it.take(400) }
+            .toList().takeLast(n)
+
+    /** yt-dlp 오류 글을 한국어 안내로 바꾼다. 원문은 따로 카드에 그대로 보여 준다. */
     fun friendlyError(raw: String?): String {
         val msg = (raw ?: "").trim()
         val last = msg.lines().lastOrNull { it.contains("ERROR", true) } ?: msg.lines().lastOrNull().orEmpty()
-        val hint = when {
-            last.contains("Sign in to confirm", true) || last.contains("not a bot", true) ->
-                "유튜브가 로그인 확인을 요구합니다. 잠시 뒤 다시 시도하거나 [엔진 업데이트]를 해 보세요."
+        return when {
+            last.contains("Sign in to confirm", true) || last.contains("not a bot", true) || last.contains("Please sign in", true) ->
+                "유튜브가 로그인/로봇 확인을 요구하며 거절했습니다. 와이파이↔모바일 데이터를 바꾸거나 잠시 뒤 다시 시도해 보세요."
+            last.contains("Requested format is not available", true) ->
+                "받을 수 있는 형식을 찾지 못했습니다. [엔진 업데이트]를 해 보세요."
             last.contains("Private video", true) -> "비공개 영상이라 받을 수 없습니다."
             last.contains("members-only", true) || last.contains("Join this channel", true) ->
                 "멤버십 전용 영상이라 받을 수 없습니다."
             last.contains("Video unavailable", true) || last.contains("not available", true) ->
                 "영상을 볼 수 없는 상태입니다(삭제·지역 제한 등)."
             last.contains("429", true) -> "요청이 너무 많다고 거절됐습니다. 잠시 뒤 다시 시도하세요."
+            last.contains("HTTP Error 403", true) -> "유튜브가 영상 데이터 받기를 거절했습니다(403). [엔진 업데이트] 후 다시 시도하세요."
+            last.contains("Precondition check failed", true) || last.contains("HTTP Error 400", true) ->
+                "유튜브가 요청을 거절했습니다(400). 잠시 뒤 다시 시도하거나 네트워크를 바꿔 보세요."
             last.contains("Unsupported URL", true) -> "지원하지 않는 주소입니다."
             last.contains("Unable to download webpage", true) || last.contains("urlopen error", true) ||
                 last.contains("Temporary failure", true) || last.contains("timed out", true) ->
                 "인터넷 연결을 확인해 주세요."
-            last.contains("ffmpeg", true) -> "변환 도구 오류입니다."
-            else -> "받지 못했습니다. [엔진 업데이트] 후 다시 시도해 보세요."
+            last.contains("ffmpeg", true) -> "변환 도구(ffmpeg) 오류입니다."
+            last.contains("Cannot run program", true) || last.contains("Permission denied", true) ->
+                "받기 엔진을 실행하지 못했습니다. [엔진 초기화]를 해 보세요."
+            else -> "받지 못했습니다. 아래 오류 원문을 확인하고 [오류 내용 복사]로 전달해 주세요."
         }
-        val tail = last.take(300)
-        return if (tail.isBlank()) hint else "$hint\n($tail)"
+    }
+
+    /** 복사용 진단 글: 앱·기기·엔진 버전, 옵션, 주소, 오류 원문, 작업 폴더에 남은 파일. */
+    fun buildReport(ctx: Context, job: DlJob, headline: String, errLines: List<String>, outLines: List<String>, workFiles: List<String>?): String {
+        val o = job.opts
+        return buildString {
+            appendLine("goodseedown ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appendLine("기기: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} / 안드로이드 ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT}) / ${android.os.Build.SUPPORTED_ABIS.joinToString()}")
+            appendLine("받기 엔진 yt-dlp: ${engineLabel(ctx)}")
+            appendLine("옵션: ${o.mode} 화질=${o.heightCap} mp3=${o.mp3Bitrate}k 태그=${o.tags} 자막=${o.subtitles} 재생목록=${o.playlist} aria2c=${o.fastAria2c}")
+            appendLine("주소: ${job.url}")
+            appendLine("요약: $headline")
+            appendLine("--- 오류 원문(stderr 끝부분) ---")
+            errLines.forEach { appendLine(it) }
+            appendLine("--- 진행 로그(stdout 끝부분) ---")
+            outLines.forEach { appendLine(it) }
+            if (workFiles != null) {
+                appendLine("--- 작업 폴더에 남은 파일 ---")
+                if (workFiles.isEmpty()) appendLine("(없음)") else workFiles.forEach { appendLine(it) }
+            }
+        }
     }
 }

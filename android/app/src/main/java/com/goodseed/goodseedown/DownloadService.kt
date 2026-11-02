@@ -90,18 +90,23 @@ class DownloadService : Service() {
         val work = File(base, "work/${job.id}")
         work.deleteRecursively()
         work.mkdirs()
+        // 실패했을 때 원인이 보이도록 yt-dlp 가 낸 줄(진행률 제외)을 끝에서부터 남겨 둔다.
+        val recent = java.util.Collections.synchronizedList(ArrayList<String>())
         try {
             val req = Engine.buildRequest(job, work)
             var lastTick = 0L
-            YoutubeDL.execute(req, job.id, false) { p, eta, line ->
+            val resp = YoutubeDL.execute(req, job.id, false) { p, eta, line ->
                 onLine(job.id, p, eta, line)
+                Engine.tailLines(line, 1).firstOrNull()?.let { l ->
+                    synchronized(recent) { recent.add(l); if (recent.size > 60) recent.removeAt(0) }
+                }
                 val now = System.currentTimeMillis()
                 if (now - lastTick > 800) {
                     lastTick = now
                     refreshOngoing(job.id)
                 }
             }
-            finishSuccess(job, work, null)
+            finishSuccess(job, work, null, resp.err, recent)
         } catch (e: YoutubeDL.CanceledException) {
             markCanceled(job, work)
         } catch (e: InterruptedException) {
@@ -111,39 +116,47 @@ class DownloadService : Service() {
                 markCanceled(job, work)
             } else if (job.opts.playlist && work.walkTopDown().any { it.isFile && it.extension.lowercase() in setOf("mp4", "mp3", "mkv", "webm", "m4a") }) {
                 // 재생목록에서 일부만 실패한 경우 — 받은 것은 저장하고 경고로 알린다.
-                finishSuccess(job, work, Engine.friendlyError(e.message))
+                finishSuccess(job, work, Engine.friendlyError(e.message), e.message, recent)
             } else {
-                DownloadCenter.update(job.id) { it.copy(state = JobState.FAILED, detail = "실패", error = Engine.friendlyError(e.message)) }
-                work.deleteRecursively()
+                fail(job, work, "실패", e.message ?: e.javaClass.name, recent, null)
             }
         } catch (e: Exception) {
-            DownloadCenter.update(job.id) { it.copy(state = JobState.FAILED, detail = "실패", error = Engine.friendlyError(e.message ?: e.javaClass.simpleName)) }
-            work.deleteRecursively()
+            fail(job, work, "실패", e.message ?: e.javaClass.name, recent, null)
         } finally {
             DownloadCenter.clearCancelFlag(job.id)
         }
         DownloadCenter.get(job.id)?.let { notifyDone(it) }
     }
 
-    private fun finishSuccess(job: DlJob, work: File, warning: String?) {
-        try {
-            val saved = Engine.saveToDownloads(this, work)
-            if (saved.isEmpty()) {
-                DownloadCenter.update(job.id) {
-                    it.copy(state = JobState.FAILED, detail = "실패", error = "받은 파일을 찾지 못했습니다. [엔진 업데이트] 후 다시 시도해 보세요.")
-                }
-            } else {
-                DownloadCenter.update(job.id) {
-                    it.copy(state = JobState.DONE, detail = "완료", progress = 1f, saved = saved, warning = warning)
-                }
-            }
+    /** 실패 처리: 한국어 요약 + yt-dlp 원문 끝부분 + 복사용 진단 글을 카드에 남기고 작업 폴더를 비운다. */
+    private fun fail(job: DlJob, work: File, detail: String, rawErr: String?, recent: List<String>, headline: String?) {
+        val h = headline ?: Engine.friendlyError(rawErr)
+        val errLines = Engine.tailLines(rawErr, 30)
+        val outLines = synchronized(recent) { recent.takeLast(20).toList() }
+        val files = work.walkTopDown().filter { it.isFile }.map { "${it.relativeTo(work).path} (${it.length()}바이트)" }.toList()
+        val report = Engine.buildReport(this, job, h, errLines, outLines, files)
+        val shown = (if (errLines.isNotEmpty()) errLines else outLines).takeLast(8).joinToString("\n")
+        DownloadCenter.update(job.id) { it.copy(state = JobState.FAILED, detail = detail, error = h, log = shown, report = report) }
+        work.deleteRecursively()
+    }
+
+    private fun finishSuccess(job: DlJob, work: File, warning: String?, rawErr: String?, recent: List<String>) {
+        val saved = try {
+            Engine.saveToDownloads(this, work)
         } catch (e: Exception) {
-            DownloadCenter.update(job.id) {
-                it.copy(state = JobState.FAILED, detail = "저장 실패", error = "다운로드 폴더에 저장하지 못했습니다: ${e.message}")
-            }
-        } finally {
-            work.deleteRecursively()
+            fail(job, work, "저장 실패", rawErr, recent, "다운로드 폴더에 저장하지 못했습니다: ${e.message}")
+            return
         }
+        if (saved.isEmpty()) {
+            // 받기는 오류 없이 끝났는데 저장할 완성 파일이 없는 경우 — 작업 폴더에 무엇이 남았는지까지 진단 글에 넣는다.
+            fail(job, work, "실패", rawErr, recent, "받기는 끝났다고 나왔지만 저장할 파일이 없습니다.")
+            return
+        }
+        DownloadCenter.update(job.id) {
+            it.copy(state = JobState.DONE, detail = "완료", progress = 1f, saved = saved, warning = warning,
+                log = if (warning != null) Engine.tailLines(rawErr, 6).joinToString("\n") else "")
+        }
+        work.deleteRecursively()
     }
 
     private fun markCanceled(job: DlJob, work: File) {

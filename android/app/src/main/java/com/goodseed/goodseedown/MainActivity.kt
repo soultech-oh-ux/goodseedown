@@ -15,6 +15,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -196,7 +197,10 @@ fun MainScreen(onAbout: () -> Unit) {
     ) {
         item {
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("goodseedown", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    Text("goodseedown", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("굿씨드AI연구소", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1B5E20))
+                }
                 TextButton(onClick = onAbout) { Text("정보") }
             }
         }
@@ -274,7 +278,7 @@ fun MainScreen(onAbout: () -> Unit) {
                     Text(
                         when (val e = engine) {
                             is EngineState.Initializing -> "엔진을 준비하는 중… (처음 한 번은 조금 걸립니다)"
-                            is EngineState.Ready -> "버전: ${e.ytdlpVersion}"
+                            is EngineState.Ready -> "yt-dlp ${e.ytdlpVersion}"
                             is EngineState.Failed -> "엔진 시작 실패: ${e.message}"
                         }, fontSize = 13.sp
                     )
@@ -286,9 +290,9 @@ fun MainScreen(onAbout: () -> Unit) {
                                 val msg = withContext(Dispatchers.IO) {
                                     try {
                                         val st = YoutubeDL.updateYoutubeDL(ctx, YoutubeDL.UpdateChannel.STABLE)
-                                        val v = YoutubeDL.version(ctx) ?: "?"
-                                        GoodseedownApp.setEngineVersion(v)
-                                        if (st == YoutubeDL.UpdateStatus.DONE) "엔진을 최신($v)으로 바꿨습니다." else "이미 최신입니다 ($v)."
+                                        GoodseedownApp.refreshEngineLabel(ctx)
+                                        val v = Engine.engineLabel(ctx)
+                                        if (st == YoutubeDL.UpdateStatus.DONE) "엔진을 최신으로 바꿨습니다: $v" else "이미 최신입니다: $v"
                                     } catch (e: Exception) {
                                         "엔진 업데이트에 실패했습니다. 인터넷 연결을 확인하세요. (${e.message?.lineSequence()?.firstOrNull()?.take(120)})"
                                     }
@@ -298,6 +302,25 @@ fun MainScreen(onAbout: () -> Unit) {
                         },
                         enabled = !updating && !busy && engine is EngineState.Ready,
                     ) { Text(if (updating) "바꾸는 중…" else "엔진 업데이트") }
+                    OutlinedButton(
+                        onClick = {
+                            updating = true; updateMsg = null
+                            scope.launch {
+                                val msg = withContext(Dispatchers.IO) {
+                                    try {
+                                        Engine.resetEngine(ctx)
+                                        GoodseedownApp.refreshEngineLabel(ctx)
+                                        "앱에 들어 있던 엔진으로 되돌렸습니다: ${Engine.engineLabel(ctx)}"
+                                    } catch (e: Exception) {
+                                        "엔진 초기화에 실패했습니다: ${e.message?.take(120)}"
+                                    }
+                                }
+                                updateMsg = msg; updating = false
+                            }
+                        },
+                        enabled = !updating && !busy && engine is EngineState.Ready,
+                    ) { Text("엔진 초기화 (업데이트 취소)") }
+                    Text("엔진 초기화는 업데이트한 엔진을 지우고 앱에 처음 들어 있던 엔진으로 되돌립니다. 오래된 엔진은 유튜브에서 막힐 수 있어, 업데이트 후 더 안 될 때만 쓰세요.", fontSize = 11.sp, color = Color(0xFF666666))
                     if (busy) Text("받는 중에는 엔진을 바꿀 수 없습니다.", fontSize = 12.sp, color = Color(0xFF666666))
                     updateMsg?.let { Text(it, fontSize = 13.sp) }
                 }
@@ -340,6 +363,14 @@ private fun JobCard(job: DlJob) {
                 else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
             job.error?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+            if (job.state == JobState.FAILED && job.log.isNotBlank()) {
+                Text("오류 원문(끝부분)", fontSize = 11.sp, color = Color(0xFF555555))
+                Text(
+                    job.log, fontSize = 10.sp, lineHeight = 13.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = Color(0xFF333333),
+                    modifier = Modifier.fillMaxWidth().background(Color(0xFFF3F3EF)).padding(6.dp),
+                )
+            }
             job.warning?.let { Text("일부는 받지 못했습니다: $it", fontSize = 12.sp, color = Color(0xFF8A5A00)) }
             if (job.state == JobState.DONE) {
                 Text("저장됨: ${job.saved.size}개 (다운로드/goodseedown)", fontSize = 12.sp, color = Color(0xFF2E7D32))
@@ -353,6 +384,13 @@ private fun JobCard(job: DlJob) {
                         OutlinedButton(onClick = { ctx.openSaved(f) }) { Text("열기") }
                     }
                 }
+                if (job.state == JobState.FAILED && job.report.isNotBlank()) {
+                    OutlinedButton(onClick = {
+                        val cm = ctx.getSystemService(ClipboardManager::class.java)
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("goodseedown 오류 내용", job.report))
+                        Toast.makeText(ctx, "오류 내용을 복사했습니다. 붙여넣어 전달해 주세요.", Toast.LENGTH_LONG).show()
+                    }) { Text("오류 내용 복사") }
+                }
                 if (job.state == JobState.DONE || job.state == JobState.FAILED || job.state == JobState.CANCELED) {
                     TextButton(onClick = { DownloadCenter.remove(job.id) }) { Text("목록에서 지우기") }
                 }
@@ -364,69 +402,84 @@ private fun JobCard(job: DlJob) {
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    var showLicense by remember { mutableStateOf(false) }
-    val licenseText = remember(showLicense) {
-        if (!showLicense) "" else try {
+    var showNotice by remember { mutableStateOf(false) }
+    val engine by GoodseedownApp.engine.collectAsState()
+    if (showNotice) {
+        BackHandler { showNotice = false }
+        NoticeScreen(onBack = { showNotice = false })
+        return
+    }
+    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            TextButton(onClick = onBack) { Text("← 뒤로") }
+            Text("정보", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("goodseedown", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text("버전 ${BuildConfig.VERSION_NAME}", fontSize = 15.sp)
+            Text(
+                when (val e = engine) {
+                    is EngineState.Ready -> "받기 엔진 yt-dlp ${e.ytdlpVersion}"
+                    is EngineState.Initializing -> "받기 엔진 준비 중"
+                    is EngineState.Failed -> "받기 엔진 시작 실패"
+                }, fontSize = 13.sp, color = Color(0xFF555555)
+            )
+            HorizontalDivider()
+            Text("만든 곳", fontWeight = FontWeight.Medium)
+            Text(AUTHOR_LINE)
+            Text("Copyright (c) 2026 굿씨드AI연구소 오경근 박사", fontSize = 13.sp)
+            OutlinedButton(onClick = { ctx.openLink(AUTHOR_URL) }) { Text("오경근 박사 소개 페이지 열기") }
+            Text(AUTHOR_URL, fontSize = 12.sp, color = Color(0xFF555555))
+            HorizontalDivider()
+            Text("사용 안내", fontWeight = FontWeight.Medium)
+            Text(
+                "링크를 직접 넣고 [받기]를 눌렀을 때만 받습니다. 다른 앱의 '공유'로 보낸 링크도 입력칸에 채워질 뿐, 자동으로 받지 않습니다. " +
+                    "저작권이 있는 영상·음악은 권리자의 허락 범위 안에서만 받아 쓰세요. 받는 책임은 사용자에게 있습니다.",
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+        // GPL 고지는 한 줄만 작게 — 누르면 별도 화면에서 전문과 구성요소를 보여 준다.
+        TextButton(onClick = { showNotice = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text("오픈소스 고지", fontSize = 11.sp, color = Color(0xFF777777))
+        }
+    }
+}
+
+/** 오픈소스 고지 화면: GPL-3.0 안내·구성요소 목록(주소 포함)·GPL-3.0 전문. */
+@Composable
+fun NoticeScreen(onBack: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val licenseText = remember {
+        try {
             ctx.assets.open("LICENSE-GPL-3.0.txt").bufferedReader().use { it.readText() }
         } catch (e: Exception) { "라이선스 전문을 읽지 못했습니다. 전문: https://www.gnu.org/licenses/gpl-3.0.html" }
     }
-    val engine by GoodseedownApp.engine.collectAsState()
-    BackHandler(enabled = showLicense) { showLicense = false }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-            TextButton(onClick = { if (showLicense) showLicense = false else onBack() }) { Text("← 뒤로") }
-            Text(if (showLicense) "GPL-3.0 전문" else "정보", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onBack) { Text("← 뒤로") }
+            Text("오픈소스 고지", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
-        if (showLicense) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                Text(licenseText, fontSize = 11.sp, lineHeight = 14.sp)
-            }
-        } else {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("goodseedown", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text("버전 ${BuildConfig.VERSION_NAME}", fontSize = 15.sp)
-                Text(
-                    when (val e = engine) {
-                        is EngineState.Ready -> "받기 엔진(yt-dlp) ${e.ytdlpVersion}"
-                        is EngineState.Initializing -> "받기 엔진 준비 중"
-                        is EngineState.Failed -> "받기 엔진 시작 실패"
-                    }, fontSize = 13.sp, color = Color(0xFF555555)
-                )
-                HorizontalDivider()
-                Text("만든 곳", fontWeight = FontWeight.Medium)
-                Text(AUTHOR_LINE)
-                Text("Copyright (c) 2026 굿씨드AI연구소 오경근 박사", fontSize = 13.sp)
-                OutlinedButton(onClick = { ctx.openLink(AUTHOR_URL) }) { Text("오경근 박사 소개 페이지 열기") }
-                Text(AUTHOR_URL, fontSize = 12.sp, color = Color(0xFF555555))
-                HorizontalDivider()
-                Text("사용 안내", fontWeight = FontWeight.Medium)
-                Text(
-                    "링크를 직접 넣고 [받기]를 눌렀을 때만 받습니다. 다른 앱의 '공유'로 보낸 링크도 입력칸에 채워질 뿐, 자동으로 받지 않습니다. " +
-                        "저작권이 있는 영상·음악은 권리자의 허락 범위 안에서만 받아 쓰세요. 받는 책임은 사용자에게 있습니다.",
-                    fontSize = 13.sp
-                )
-                HorizontalDivider()
-                Text("라이선스 (GPL-3.0)", fontWeight = FontWeight.Medium)
-                Text(
-                    "이 앱은 GNU General Public License v3.0(GPL-3.0) 조건으로 제공되며, 보증이 없습니다. " +
-                        "앱이 포함하는 youtubedl-android(GPL-3.0), aria2(GPL-2.0 이상) 등 구성요소의 라이선스 조건도 따릅니다.",
-                    fontSize = 13.sp
-                )
-                OutlinedButton(onClick = { showLicense = true }) { Text("GPL-3.0 전문 보기") }
-                OutlinedButton(onClick = { ctx.openLink("https://www.gnu.org/licenses/gpl-3.0.html") }) { Text("GPL-3.0 웹 페이지 열기") }
-                HorizontalDivider()
-                Text("함께 쓰는 오픈소스", fontWeight = FontWeight.Medium)
-                Text(
-                    "· yt-dlp (Unlicense) — https://github.com/yt-dlp/yt-dlp\n" +
-                        "· youtubedl-android (GPL-3.0) — https://github.com/junkfood02/youtubedl-android\n" +
-                        "· FFmpeg (LGPL/GPL, youtubedl-android 에 포함된 빌드)\n" +
-                        "· aria2 (GPL-2.0 이상)\n" +
-                        "· Python (PSF 라이선스)\n" +
-                        "· AndroidX / Jetpack Compose (Apache-2.0)",
-                    fontSize = 12.sp
-                )
-                Spacer(Modifier.height(20.dp))
-            }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "이 앱은 GNU General Public License v3.0(GPL-3.0) 조건으로 제공되며, 보증이 없습니다. " +
+                    "앱이 포함하는 youtubedl-android(GPL-3.0), aria2(GPL-2.0 이상) 등 구성요소의 라이선스 조건도 따릅니다. " +
+                    "GPL-3.0 웹 페이지: https://www.gnu.org/licenses/gpl-3.0.html",
+                fontSize = 12.sp
+            )
+            Text("함께 쓰는 오픈소스", fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Text(
+                "· yt-dlp (Unlicense) — https://github.com/yt-dlp/yt-dlp\n" +
+                    "· youtubedl-android (GPL-3.0) — https://github.com/junkfood02/youtubedl-android\n" +
+                    "· FFmpeg (LGPL/GPL, youtubedl-android 에 포함된 빌드)\n" +
+                    "· aria2 (GPL-2.0 이상)\n" +
+                    "· Python (PSF 라이선스)\n" +
+                    "· AndroidX / Jetpack Compose (Apache-2.0)",
+                fontSize = 11.sp
+            )
+            HorizontalDivider()
+            Text("GPL-3.0 전문", fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Text(licenseText, fontSize = 10.sp, lineHeight = 13.sp)
         }
     }
 }

@@ -151,7 +151,7 @@
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
         <span>Windows용 다운로드</span>
       </a>
-      <a id="dl-android" class="btn-dl secondary" href="https://github.com/soultech-oh-ux/goodseedown/releases/download/android-v1.0.0/goodseedown-android-1.0.0.apk" rel="noopener">
+      <a id="dl-android" class="btn-dl secondary" href="https://github.com/soultech-oh-ux/goodseedown/releases/download/android-v1.0.1/goodseedown-android-1.0.1.apk" rel="noopener">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>
         <span>Android용 다운로드</span>
       </a>
@@ -216,7 +216,7 @@
           <h3>시스템 요구사항</h3>
           <ul>
             <li>Windows 10 / 11 64비트</li>
-            <li>Android 10 이상 64비트 (APK 1.0.0, 132 MB)</li>
+            <li>Android 10 이상 64비트 (APK 1.0.1, 76 MB)</li>
             <li>아이폰(iOS)은 지원하지 않습니다.</li>
           </ul>
         </div>
@@ -277,7 +277,7 @@
       btn.removeAttribute("target");
       var ver = rel.tag_name || rel.name || "";
       var mb = typeof a.size === "number" ? (a.size / 1048576).toFixed(1) + " MB" : "";
-      meta.textContent = [ver ? "Windows 최신 버전 " + ver : "", mb, "Android 1.0.0 · 132.0 MB"].filter(Boolean).join(" · ");
+      meta.textContent = [ver ? "Windows 최신 버전 " + ver : "", mb, "Android 1.0.1 · 76.4 MB"].filter(Boolean).join(" · ");
     })
     .catch(function () { clearTimeout(timer); fallback(); });
 })();

@@ -37,7 +37,7 @@ class GoodseedownApp : Application() {
                 YoutubeDL.getInstance().init(this)
                 FFmpeg.getInstance().init(this)
                 Aria2c.getInstance().init(this)
-                _engine.value = EngineState.Ready(YoutubeDL.version(this) ?: "내장 버전")
+                _engine.value = EngineState.Ready(Engine.engineLabel(this))
             } catch (e: Throwable) {
                 _engine.value = EngineState.Failed(e.message ?: e.javaClass.simpleName)
             }
@@ -52,8 +52,9 @@ class GoodseedownApp : Application() {
         private val _engine = MutableStateFlow<EngineState>(EngineState.Initializing)
         val engine: StateFlow<EngineState> = _engine.asStateFlow()
 
-        fun setEngineVersion(v: String) {
-            _engine.value = EngineState.Ready(v)
+        /** 엔진을 업데이트/초기화한 뒤 화면에 보이는 버전 글을 실제 파일 기준으로 다시 읽는다. */
+        fun refreshEngineLabel(ctx: android.content.Context) {
+            _engine.value = EngineState.Ready(Engine.engineLabel(ctx))
         }
     }
 }

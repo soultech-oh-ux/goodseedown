@@ -20,9 +20,9 @@ android {
         applicationId = "com.goodseed.goodseedown"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        versionCode = 2
+        versionName = "1.0.1"
+        ndk { abiFilters += listOf("arm64-v8a") }   // 실제 폰(arm64)만 — 용량 절반
     }
 
     signingConfigs {
