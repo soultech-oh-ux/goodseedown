@@ -1,6 +1,6 @@
 {
   "name": "goodseedown",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "goodseedown — 동영상 다운로더 (goodseed AI LAB)",
   "appId": "kr.goodseed.down",

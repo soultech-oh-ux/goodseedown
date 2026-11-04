@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="updBanner" class="upd-banner" hidden role="status" aria-live="polite"><span class="upd-ico" aria-hidden="true">⬆</span><span id="updText" class="upd-text"></span><button type="button" id="btnUpgrade" class="primary upd-go">업그레이드</button><button type="button" id="btnUpdLater" class="ghost upd-later">나중에</button></div>
+<div id="updBanner" class="upd-banner" hidden role="status" aria-live="polite"><div class="upd-main"><div id="updText" class="upd-text"></div><div id="updHow" class="upd-how"></div><div id="updSize" class="upd-size"></div></div><div class="upd-btns"><button type="button" id="btnUpgrade" class="primary upd-go">업그레이드</button><button type="button" id="btnUpdGuide" class="upd-guide">업데이트 방법</button><button type="button" id="btnUpdLater" class="ghost upd-later">나중에</button></div></div>
 <header class="top">
   <div class="brand"><img src="icon.png" alt="" width="34" height="34"><div><strong>goodseedown</strong><small>goodseed AI LAB</small></div></div>
   <div class="modes" role="tablist" aria-label="화면 선택">
@@ -16,7 +16,7 @@
     <button type="button" role="tab" id="modeMp3" data-mode="mp3" class="mode" aria-selected="false">MP3</button>
   </div>
   <form class="urlbar videoonly" id="urlForm" autocomplete="off">
-    <input id="url" type="text" spellcheck="false" placeholder="영상·재생목록·채널 링크를 붙여넣고 [다운로드] (여러 개는 줄바꿈·띄어쓰기로)" aria-label="다운로드할 링크">
+    <input id="url" type="text" spellcheck="false" placeholder="영상·재생목록·채널 링크를 붙여넣으세요" title="링크 여러 개는 줄바꿈·띄어쓰기로 구분해 한 번에 넣을 수 있습니다" aria-label="다운로드할 링크">
     <button type="button" id="btnPaste" class="ghost" title="클립보드의 링크 붙여넣기">붙여넣기</button>
     <label class="mini" title="형식"><span>형식</span><select id="dlKind" aria-label="형식"></select></label>
     <label class="mini" id="dlQualityWrap" title="화질"><span id="dlQualityLbl">화질</span><select id="dlQuality" aria-label="화질"></select></label>

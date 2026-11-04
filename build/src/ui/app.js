@@ -4,6 +4,7 @@
   const gsd = window.gsd;
   const $ = s => document.querySelector(s);
   const state = { settings: null, jobs: new Map(), subs: [], tab: 'downloads', mode: 'video' };
+  let nagHook = () => { }; // 업데이트 재알림(초기화에서 연결)
 
   // ---------- 작은 도구 ----------
   function h(tag, attrs, ...kids) {
@@ -362,10 +363,12 @@
   // ---------- 탭·초기화 ----------
   function setTab(t) {
     if (state.mode === 'mp3' && t === 'subs') t = 'downloads';
+    const was = state.tab;
     state.tab = t;
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
     $('#paneDownloads').hidden = t !== 'downloads'; $('#paneSubs').hidden = t !== 'subs'; $('#paneSettings').hidden = t !== 'settings';
     if (t === 'settings') renderSettings();
+    if (t === 'downloads' && was !== 'downloads') nagHook(); // 다운로드 탭으로 돌아올 때
   }
   // ---------- MP3 화면 ----------
   function applyMode(mode, { persist = false } = {}) {
@@ -392,7 +395,7 @@
     for (const j of await gsd.listJobs()) state.jobs.set(j.id, j);
     state.subs = await gsd.subs.list();
     applyInline(); renderJobs(); renderSubs(); applyMp3Controls(); applyMode(state.settings.lastMode);
-    $('#urlForm').addEventListener('submit', e => { e.preventDefault(); if (!$('#busy').hidden) return; inlineSaving.then(() => submitLinks($('#url'), videoProfile())).catch(err => toast('오류: ' + err.message, 'err')); });
+    $('#urlForm').addEventListener('submit', e => { e.preventDefault(); if (!$('#busy').hidden) return; inlineSaving.then(() => { nagHook(); return submitLinks($('#url'), videoProfile()); }).catch(err => toast('오류: ' + err.message, 'err')); });
     $('#btnSubscribe').addEventListener('click', () => { if ($('#busy').hidden) subscribeLink().catch(err => toast('오류: ' + err.message, 'err')); });
     $('#btnBusyCancel').addEventListener('click', () => { if (busyCancel) busyCancel(); });
     $('#dlKind').addEventListener('change', e => { const v = e.target.value; if (v === 'video') saveInline({ kind: 'video' }); else if (v === 'mp3') saveInline({ kind: 'audio', audioFormat: 'mp3' }); });
@@ -400,7 +403,7 @@
     $('#btnPaste').addEventListener('click', async () => { const u = await gsd.readClipboard(); if (u.length) $('#url').value = u[0]; else toast('클립보드에 링크가 없습니다.', 'info'); $('#url').focus(); });
     document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
     document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => { if (b.dataset.mode !== state.mode) applyMode(b.dataset.mode, { persist: true }); if (state.tab !== 'downloads') setTab('downloads'); (state.mode === 'mp3' ? $('#mp3Url') : $('#url')).focus(); }));
-    $('#mp3Form').addEventListener('submit', e => { e.preventDefault(); (!$('#busy').hidden ? Promise.resolve() : submitLinks($('#mp3Url'), mp3Profile())).catch(err => toast('오류: ' + err.message, 'err')); });
+    $('#mp3Form').addEventListener('submit', e => { e.preventDefault(); (!$('#busy').hidden ? Promise.resolve() : (nagHook(), submitLinks($('#mp3Url'), mp3Profile()))).catch(err => toast('오류: ' + err.message, 'err')); });
     $('#mp3Paste').addEventListener('click', async () => { const u = await gsd.readClipboard(); if (u.length) { $('#mp3Url').value = u[0]; } else toast('클립보드에 링크가 없습니다.', 'info'); $('#mp3Url').focus(); });
     for (const r of document.querySelectorAll('input[name=mp3q]')) r.addEventListener('change', () => { if (r.checked) gsd.setSettings({ mp3: { bitrate: Number(r.value) } }); });
     $('#mp3Id3').addEventListener('change', e => gsd.setSettings({ mp3: { id3: e.target.checked } }));
@@ -416,22 +419,65 @@
     gsd.onJobsRemoved(id => { state.jobs.delete(id); renderJobs([]); });
     gsd.onSubs(arr => { state.subs = arr; renderSubs(); });
     gsd.onSettings(s => { state.settings = s; applyInline(); applyMp3Controls(); if (state.tab === 'settings') { const a = document.activeElement; if (!a || !$('#settingsForm').contains(a) || a.id === 'set-savedir') renderSettings(); else { const d = $('#set-savedir'); if (d) { d.textContent = s.saveDir; d.title = s.saveDir; } } } });
-    // ---------- 새 버전 배너 — 시작 시 자동 확인 결과를 화면 맨 위에 알린다(자동 설치 없음: [업그레이드]를 눌러야 시작) ----------
-    let updDismissed = false; // [나중에]: 이번 실행 동안만 숨김(다음 실행에는 다시 보임)
-    const showUpd = info => {
-      if (!info || !info.version || updDismissed) return;
-      $('#updText').replaceChildren(`새 버전(${info.version})이 나왔습니다. 업그레이드하세요.`, h('small', { text: `현재 ${info.current} → ${info.version}${info.sizeLine ? ' · ' + info.sizeLine : ''}` }));
-      $('#updBanner').hidden = false;
-    };
-    $('#btnUpdLater').addEventListener('click', () => { updDismissed = true; $('#updBanner').hidden = true; });
-    $('#btnUpgrade').addEventListener('click', async () => {
+    // ---------- 새 버전 배너·업데이트 방법 안내·재알림 (자동 설치 없음: [업그레이드]를 눌러야 시작) ----------
+    let updInfo = null, updDismissed = false, nagCount = 0, nagLast = 0;
+    const NAG_MAX = 3, NAG_GAP_MS = 60000; // [나중에]로 숨긴 뒤 작은 알림은 한 실행에 최대 3번, 60초 이상 간격
+    const howLine = i => `방법: [업그레이드] 클릭 → ${i.patch ? '바뀐 부분만 받아' : '새 버전을 받아'} 자동 교체 → 프로그램이 다시 켜지면 완료`;
+    function showUpd(info) {
+      if (!info || !info.version) return;
+      updInfo = info;
+      $('#updText').textContent = `📢 새 버전(${info.version})이 나왔습니다. 업데이트해 주세요.`;
+      $('#updHow').textContent = howLine(info);
+      $('#updSize').textContent = `현재 ${info.current} → ${info.version}${info.sizeLine ? ' · ' + info.sizeLine : ''}`;
+      if (!updDismissed) $('#updBanner').hidden = false;
+    }
+    async function startUpgrade() {
       const b = $('#btnUpgrade'); b.disabled = true;
       try { const r = await gsd.appUpdateStart(); if (r && r.busy) toast('이미 업데이트를 확인하거나 진행하는 중입니다.', 'info'); }
       catch (err) { toast('업데이트를 시작하지 못했습니다: ' + err.message, 'err'); }
       finally { b.disabled = false; }
-    });
+    }
+    function openUpdateGuide() {
+      if (!updInfo) return;
+      const i = updInfo, notes = String(i.notes || '').trim();
+      openModal(close => h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': '업데이트 방법', id: 'dlgUpdate', style: 'width:min(620px,100%)' },
+        h('header', {}, h('div', { class: 't' }, h('b', { text: `업데이트 방법 — 새 버전 ${i.version}` }))),
+        h('div', { class: 'body' },
+          h('ol', { class: 'steps' },
+            h('li', {}, h('b', { text: '[업그레이드] 버튼을 누릅니다.' }), ' 누르기 전에는 아무것도 설치되지 않습니다.'),
+            h('li', {}, h('b', { text: '받기와 교체가 진행됩니다.' }), ` ${i.patch ? '바뀐 부분만 받아' : '새 버전을 받아'} 안전하게 확인(SHA-256)한 뒤 바꿉니다. 받는 중인 다운로드가 있으면 일시정지한 뒤 업데이트하고, 새 버전에서 [이어받기]를 눌러 계속 받습니다.`),
+            h('li', {}, h('b', { text: '프로그램이 저절로 다시 켜집니다.' }), ' 설정 화면의 goodseedown 버전 표시(또는 하단 [정보])에서 새 버전인지 확인하세요.'),
+            h('li', {}, h('b', { text: '잘 안 되면' }), ' https://goodseedown.vercel.app/ 에서 새 버전을 받아 실행하세요. 설정·구독은 그대로 유지됩니다(별도 폴더에 저장).')),
+          notes ? h('div', { class: 'relnotes' }, h('b', { text: '이번 업데이트 내용' }), h('pre', { text: notes })) : null),
+        h('footer', {}, h('button', { type: 'button', id: 'btnUpdGuideClose', text: '닫기', onclick: close }),
+          h('button', { type: 'button', class: 'primary', id: 'btnUpdGuideGo', 'data-autofocus': '1', text: '지금 업그레이드', onclick: () => { close(); startUpgrade(); } }))));
+    }
+    // [나중에] 로 숨긴 뒤에도 업데이트가 남아 있으면 작은 알림으로 한 번씩 다시 알린다(과하지 않게: 실행당 NAG_MAX 번, NAG_GAP_MS 간격)
+    function nag() {
+      if (!updInfo || !updDismissed || nagCount >= NAG_MAX || Date.now() - nagLast < NAG_GAP_MS) return;
+      nagCount++; nagLast = Date.now();
+      const t = h('div', { class: 'toast nag', id: 'updNag' }, `새 버전(${updInfo.version})이 있습니다 —`, h('button', { type: 'button', id: 'btnNagGuide', text: '업데이트 방법 보기', onclick: () => { t.remove(); openUpdateGuide(); } }));
+      $('#toasts').append(t); setTimeout(() => t.remove(), 9000);
+    }
+    nagHook = nag;
+    $('#btnUpdLater').addEventListener('click', () => { updDismissed = true; $('#updBanner').hidden = true; });
+    $('#btnUpgrade').addEventListener('click', startUpgrade);
+    $('#btnUpdGuide').addEventListener('click', openUpdateGuide);
     gsd.onAppUpdate(showUpd);
     gsd.appUpdateInfo().then(showUpd).catch(() => { }); // 화면이 늦게 뜬 경우를 위해 이미 확인된 결과도 한 번 읽는다
+    // 업데이트 직후 첫 실행: '새 버전으로 업데이트되었습니다' + 바뀐 점을 한 번만 알린다
+    const WHATS_NEW = {
+      '1.2.1': ['새 버전이 나오면 화면 맨 위 배너에 업데이트 방법을 한 줄로 알려 주고, [업데이트 방법] 버튼으로 단계별 안내를 볼 수 있습니다.', '[나중에]로 숨겨도 [다운로드]를 누를 때 등에 작은 알림으로 다시 알려 줍니다(자동 설치는 여전히 없습니다).', '링크 입력칸이 좁아 안내 문구가 잘리던 문제를 고쳤습니다.'],
+    };
+    gsd.appUpdateNotice().then(n => {
+      if (!n) return;
+      const items = WHATS_NEW[n.to] || [];
+      openModal(close => h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': '업데이트 완료', id: 'dlgUpdated', style: 'width:min(540px,100%)' },
+        h('header', {}, h('div', { class: 't' }, h('b', { text: `${n.to}로 업데이트되었습니다` }))),
+        h('div', { class: 'body' }, h('p', { text: n.from ? `${n.from} → ${n.to} 업데이트가 끝났습니다. 설정·구독·받던 목록은 그대로입니다.` : '업데이트가 끝났습니다. 설정·구독·받던 목록은 그대로입니다.' }),
+          items.length ? h('div', {}, h('b', { text: '바뀐 점' }), h('ul', { class: 'steps' }, ...items.map(t => h('li', { text: t })))) : null),
+        h('footer', {}, h('button', { type: 'button', class: 'primary', id: 'btnUpdatedOk', 'data-autofocus': '1', text: '확인', onclick: close }))));
+    }).catch(() => { });
     gsd.onToast(t => toast(t.text, t.kind));
     gsd.onEngineProgress(p => { if (p.phase === 'start') toast(`yt-dlp 엔진 ${p.version} 을(를) 내려받는 중…`, 'info', 3000); if (p.phase === 'done') refreshEngineLabel(); });
     function refreshEngineLabel() { if (state.tab === 'settings') renderSettings(); }

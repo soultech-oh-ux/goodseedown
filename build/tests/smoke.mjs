@@ -2,7 +2,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs'; import path from 'node:path'; import crypto from 'node:crypto'; import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url)); const b = path.resolve(here, '..');
-const exe = process.argv[2] || path.join(b, '..', 'dist', 'goodseedown-1.2.0-Windows-x64.exe');
+const exe = process.argv[2] || path.join(b, '..', 'dist', 'goodseedown-1.2.1-Windows-x64.exe');
 const procs = () => { const r = spawnSync('powershell.exe', ['-NoProfile', '-Command', "@(Get-CimInstance Win32_Process -Filter \"Name='goodseedown.exe'\").Count"], { encoding: 'utf8' }); return Number(r.stdout.trim() || 0); };
 const out = path.join(b, 'work', 'smoke'); fs.rmSync(out, { recursive: true, force: true }); fs.mkdirSync(out, { recursive: true });
 const rep = path.join(out, 'report.json');

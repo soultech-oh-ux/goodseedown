@@ -117,6 +117,7 @@ if (app && typeof app.whenReady === 'function') {
       handle('engine-check', () => engineCheckAndOffer({ manual: true }));
       handle('app-update-check', () => updater.check({ manual: true }));
       handle('app-update-info', () => updater.getAvailable());   // 화면 상단 '새 버전' 배너용 — 시작 시 자동 확인 결과(없으면 null)
+      handle('app-update-notice', () => updater.takeUpdatedNotice());   // 업데이트 직후 첫 실행의 '업데이트되었습니다' 안내(한 번만)
       handle('app-update-start', () => updater.upgrade());        // 배너의 [업그레이드]를 눌렀을 때만(자동 설치 없음)
       handle('show-licenses', () => showLicenses());
       handle('show-notice', () => showNotice());

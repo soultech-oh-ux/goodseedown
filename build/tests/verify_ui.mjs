@@ -1,5 +1,5 @@
 // goodseedown 화면(UI) 종단 시험 — 실제 앱(Electron)을 띄우고 원격 디버깅(CDP)으로 실제 클릭·입력을 하며 결과 파일을 ffprobe 로 확인한다.
-//   --mode exe : 빌드한 포터블 exe(dist\goodseedown-1.2.0-Windows-x64.exe) / --mode dev : electron-base + src (빠른 반복)
+//   --mode exe : 빌드한 포터블 exe(dist\goodseedown-1.2.1-Windows-x64.exe) / --mode dev : electron-base + src (빠른 반복)
 // 앱 데이터 폴더는 격리(GOODSEEDOWN_DATA_ROOT)하고 저장 폴더도 work\vu 안으로 돌린다. 시험 영상은 모두 공개(CC-BY) Blender 영상이다.
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
@@ -15,7 +15,7 @@ const OUT = path.join(W, 'out'); const DATA = path.join(W, 'data');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const limit = (name, detail) => { results.push({ name, ok: true, limited: true, detail }); console.log('LIMIT ' + name + '  ' + JSON.stringify(detail)); }; const check = (name, ok, detail) => { results.push({ name, ok: !!ok, detail }); console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail !== undefined ? '  ' + JSON.stringify(detail).slice(0, 360) : '')); };
 const until = async (fn, ms = 60000, step = 250) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { const v = await fn(); if (v) return v; } catch { } await sleep(step); } return null; };
-const exe = path.join(B, '..', 'dist', 'goodseedown-1.2.0-Windows-x64.exe');
+const exe = path.join(B, '..', 'dist', 'goodseedown-1.2.1-Windows-x64.exe');
 const marker = mode === 'exe' ? '\\goodseedown\\bin\\' : path.join(B, 'electron-base').toLowerCase();
 function mine() { const m = marker.replace(/'/g, "''").toLowerCase(); const r = spawnSync('powershell.exe', ['-NoProfile', '-Command', `@(Get-CimInstance Win32_Process -Filter "Name='goodseedown.exe' OR Name='electron.exe'" | ? { $_.ExecutablePath -and $_.ExecutablePath.ToLower().Contains('${m}') } | % { $_.ProcessId }) -join ','`], { encoding: 'utf8' }); return r.stdout.trim().split(',').filter(Boolean).map(Number); }
 const killMine = () => { for (const p of mine()) { try { process.kill(p); } catch { } } };
@@ -78,6 +78,12 @@ try {
     const labels = await ev(`[...document.querySelectorAll('button')].filter(b=>b.offsetParent!==null).map(b=>b.textContent.trim())`);
     check('UI2 메인 화면: [분석] 버튼·스마트 모드 스위치 없음, [다운로드]·[구독하기]·형식·화질 선택이 있음', !labels.includes('분석') && !(await exists('#smartToggle')) && !(await exists('.smart')) && (await text('#btnGo')) === '다운로드' && (await text('#btnSubscribe')) === '구독하기' && (await exists('#dlKind')) && (await exists('#dlQuality')), labels);
     check('UI2 형식 선택지 = 영상 MP4 / MP3 음악, 영상 화질 = 최고·1080p·720p·480p', JSON.stringify(await ev(`[...document.querySelectorAll('#dlKind option')].map(o=>o.textContent)`)) === JSON.stringify(['영상 MP4', 'MP3 음악']) && JSON.stringify(await ev(`[...document.querySelectorAll('#dlQuality option')].map(o=>o.textContent)`)) === JSON.stringify(['최고', '1080p', '720p', '480p']));
+    const wid = await ev(`(()=>{const i=document.getElementById('url');const c=document.createElement('canvas').getContext('2d');const cs=getComputedStyle(i);c.font=cs.fontSize+' '+cs.fontFamily;return {w:i.clientWidth,need:c.measureText(i.placeholder).width+parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight)+4,over:document.documentElement.scrollWidth-window.innerWidth,iw:window.innerWidth}})()`);
+    check('UI2 기본 창 너비에서 링크 입력칸이 안내 문구(placeholder)를 자르지 않을 만큼 넓음(300px 이상)·가로 넘침 없음', wid.w >= 300 && wid.need <= wid.w && wid.over <= 0, wid);
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 880, height: 700, deviceScaleFactor: 1, mobile: false }); await sleep(500);
+    const narrow = await ev(`(()=>{const i=document.getElementById('url');const r=[...document.querySelectorAll('.top button, .top select, .top input')].map(e=>e.getBoundingClientRect());return {w:i.clientWidth,over:document.documentElement.scrollWidth-window.innerWidth,clipped:r.filter(b=>b.width>0&&(b.right>window.innerWidth+1||b.left<-1)).length}})()`);
+    check('UI2 최소 창 너비(880px)에서도 입력칸 300px 이상·버튼이 잘리거나 가로 넘침 없음(줄바꿈)', narrow.w >= 300 && narrow.over <= 0 && narrow.clipped === 0, narrow);
+    await cdp.send('Emulation.clearDeviceMetricsOverride'); await sleep(300);
     await setVal('#dlKind', 'mp3'); await sleep(500);
     check('UI2 형식을 MP3 로 바꾸면 화질 칸이 음질(320/256/192/128kbps)로 바뀌고 설정 기본값에 저장', JSON.stringify(await ev(`[...document.querySelectorAll('#dlQuality option')].map(o=>o.textContent)`)) === JSON.stringify(['320kbps', '256kbps', '192kbps', '128kbps']) && (await text('#dlQualityLbl')) === '음질' && JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).defaults.audioFormat === 'mp3', JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).defaults);
     await setVal('#dlQuality', '192'); await sleep(400);
@@ -204,8 +210,8 @@ try {
   // ===== UI13: 새 버전 배너 (가짜 릴리스 서버 — 실제 GitHub 로 나가지 않음) =====
   if (want('UI13')) {
     const { createFakeServer } = await import('../fake-release-server.mjs');
-    const srv = await createFakeServer({ exe: Buffer.from('MZ' + 'x'.repeat(8192)), tag: 'v1.2.1', notes: '시험 노트' });
-    const banner = () => ev(`(()=>{const b=document.getElementById('updBanner');return {shown:!!b&&!b.hidden&&b.offsetParent!==null,text:(document.getElementById('updText')||{}).innerText||'',btn:(document.getElementById('btnUpgrade')||{}).textContent||'',later:(document.getElementById('btnUpdLater')||{}).textContent||''}})()`);
+    const srv = await createFakeServer({ exe: Buffer.from('MZ' + 'x'.repeat(8192)), tag: 'v1.2.2', notes: '시험 노트: 새 기능 A' });
+    const banner = () => ev(`(()=>{const b=document.getElementById('updBanner');return {shown:!!b&&!b.hidden&&b.offsetParent!==null,text:(document.getElementById('updText')||{}).innerText||'',how:(document.getElementById('updHow')||{}).innerText||'',size:(document.getElementById('updSize')||{}).innerText||'',guide:(document.getElementById('btnUpdGuide')||{}).textContent||'',btn:(document.getElementById('btnUpgrade')||{}).textContent||'',later:(document.getElementById('btnUpdLater')||{}).textContent||''}})()`);
     const nativeDlg = () => spawnSync('powershell.exe', ['-NoProfile', '-Command', `@(Get-Process | ? { $_.MainWindowTitle -like '*업데이트*' }).Count`], { encoding: 'utf8' }).stdout.trim();
     const relaunch = async api => { try { await Promise.race([cdp.send('Browser.close'), sleep(3000)]); } catch { } try { cdp.close(); } catch { } await until(() => mine().length === 0, 60000, 500); killMine(); await sleep(1500);
       const e2 = { ...env, GOODSEEDOWN_UPDATE_API: api, GOODSEEDOWN_ENGINE_API: 'http://127.0.0.1:9/none' }; child = mode === 'exe' ? spawn(exe, [], { env: e2, stdio: 'ignore' }) : spawn(path.join(B, 'electron-base', 'electron.exe'), [path.join(B, 'src')], { env: e2, stdio: 'ignore' });
@@ -213,27 +219,57 @@ try {
     // (1) 새 버전 있음
     await relaunch(srv.apiUrl);
     const shown = await until(async () => { const b = await banner(); return b.shown ? b : null; }, 40000, 500);
-    check('UI13-1 새 버전(1.2.1) 있음 → 화면 맨 위 배너 "새 버전(1.2.1)이 나왔습니다. 업그레이드하세요."·[업그레이드]·[나중에]', !!shown && /새 버전\(1\.2\.1\)이 나왔습니다\. 업그레이드하세요\./.test(shown.text) && shown.btn === '업그레이드' && shown.later === '나중에', shown);
+    check('UI13-1 새 버전(1.2.2) 있음 → 맨 위 배너 "📢 새 버전(1.2.2)이 나왔습니다. 업데이트해 주세요."·방법 한 줄·[업그레이드][업데이트 방법][나중에]', !!shown && shown.text === '📢 새 버전(1.2.2)이 나왔습니다. 업데이트해 주세요.' && /^방법: \[업그레이드\] 클릭 → (바뀐 부분만 받아|새 버전을 받아) 자동 교체 → 프로그램이 다시 켜지면 완료$/.test(shown.how) && /현재 1\.2\.1 → 1\.2\.2/.test(shown.size) && shown.btn === '업그레이드' && shown.guide === '업데이트 방법' && shown.later === '나중에', shown);
     check('UI13-2 배너가 다운로드 화면의 제일 위(헤더보다 위)에 있음', await ev(`(()=>{const b=document.getElementById('updBanner').getBoundingClientRect(), h=document.querySelector('header.top').getBoundingClientRect(); return b.top<h.top && b.top<=1})()`));
     await sleep(2500);
     check('UI13-3 ★배너만 뜨고 확인창(네이티브 대화상자)은 따로 뜨지 않음 · 클릭 전에는 새 exe·패치 다운로드 요청 0건(자동 설치 없음)', nativeDlg() === '0' && !srv.hits.some(h => /^\/dl\/goodseedown-/.test(h) || /\.patch$/.test(h)) && !srv.hits.includes('/dl/SHA256SUMS.txt'), { dlg: nativeDlg(), hits: srv.hits });
+    await click('#btnUpdGuide'); const gd = await waitSel('#dlgUpdate', 5000); const gt = gd ? await text('#dlgUpdate') : '';
+    check('UI13-3b [업데이트 방법] → 단계별 안내 창(1.[업그레이드] 2.받기·교체·다운로드 일시정지 후 이어받기 3.자동 재시작·버전 확인 4.https://goodseedown.vercel.app/ 새로 받기·설정·구독 유지) + 릴리스 노트 요약 + [지금 업그레이드]', !!gd && /\[업그레이드\] 버튼을 누릅니다/.test(gt) && /일시정지한 뒤 업데이트하고/.test(gt) && /\[이어받기\]/.test(gt) && /저절로 다시 켜집니다/.test(gt) && /버전/.test(gt) && /https:\/\/goodseedown\.vercel\.app\//.test(gt) && /설정·구독은 그대로/.test(gt) && /새 기능 A/.test(gt) && (await exists('#btnUpdGuideGo')) && (await text('#btnUpdGuideGo')) === '지금 업그레이드', gt.replace(/\n/g, ' ').slice(0, 200));
+    check('UI13-3c 방법 창을 열어도 설치·다운로드 요청 0건(보기만)', !srv.hits.some(h => /^\/dl\//.test(h)), srv.hits);
+    await click('#btnUpdGuideClose'); await sleep(300);
+    check('UI13-3d [닫기] → 창이 닫히고 배너는 그대로', !(await exists('#dlgUpdate')) && (await banner()).shown);
     await click('#btnUpdLater'); await sleep(400);
     check('UI13-4 [나중에] → 배너가 사라지고(이번 실행 동안 숨김) 다운로드 요청 없음', !(await banner()).shown && !srv.hits.some(h => /^\/dl\//.test(h)), srv.hits);
+    // 재알림: [나중에] 로 숨긴 뒤에도 다운로드 탭으로 돌아오거나 [다운로드]를 누르면 작은 알림(한 실행에 최대 3번·60초 간격)
+    const nags = () => ev(`document.querySelectorAll('#updNag').length`);
+    check('UI13-4a [나중에] 직후에는 재알림 없음(과하지 않게)', (await nags()) === 0);
+    await click('#tabSettings'); await sleep(300); await click('#tabDownloads'); await sleep(400);
+    check('UI13-4b 다운로드 탭으로 돌아오면 작은 알림 "새 버전(1.2.2)이 있습니다 — 업데이트 방법 보기"', (await nags()) === 1 && /새 버전\(1\.2\.2\)이 있습니다/.test(await text('#updNag')) && (await text('#btnNagGuide')) === '업데이트 방법 보기', await text('#updNag'));
+    await click('#tabSettings'); await sleep(200); await click('#tabDownloads'); await sleep(300); await setVal('#url', ''); await click('#btnGo'); await sleep(400);
+    check('UI13-4c 바로 이어서 다시 해도 알림이 겹치지 않음(60초 간격 제한)', (await nags()) === 1, await nags());
+    await click('#btnNagGuide'); const g2 = await waitSel('#dlgUpdate', 5000);
+    check('UI13-4d 알림의 [업데이트 방법 보기] → 방법 창이 열림', !!g2 && (await nags()) === 0);
+    await click('#btnUpdGuideClose'); await sleep(300);
+    // 시간 경과를 흉내 내어(Date.now 앞당김) 상한(최대 3번)을 확인한다
+    let shownN = 1; for (let k = 1; k <= 5; k++) { await ev(`(()=>{window.__dn=window.__dn||Date.now; Date.now=()=>window.__dn()+${k * 61000}; return true})()`); await click('#tabSettings'); await sleep(150); await click('#tabDownloads'); await sleep(250); if ((await nags()) >= 1) shownN++; await ev(`document.querySelectorAll('#updNag').forEach(n=>n.remove())`); }
+    check('UI13-4e 한 실행에 재알림은 최대 3번(그 뒤로는 더 뜨지 않음)', shownN === 3, shownN);
+    await ev(`(()=>{Date.now=window.__dn; return true})()`);
+    check('UI13-4f 재알림이 뜨는 동안에도 설치·다운로드 요청 0건(자동 설치 없음)', !srv.hits.some(h => /^\/dl\//.test(h)), srv.hits);
     // (2) 다음 실행에는 다시 보임
     await relaunch(srv.apiUrl);
     const again = await until(async () => { const b = await banner(); return b.shown ? b : null; }, 40000, 500);
     check('UI13-5 [나중에] 뒤 다음 실행에는 배너가 다시 보임', !!again, again);
     // (3) 최신(같은 버전)·확인 실패 → 배너 없음
-    srv.cfg.tag = 'v1.2.0'; await relaunch(srv.apiUrl); await sleep(12000);
+    srv.cfg.tag = 'v1.2.1'; await relaunch(srv.apiUrl); await sleep(12000);
     check('UI13-6 최신 버전이면 배너 없음(조용히)', !(await banner()).shown && nativeDlg() === '0', await banner());
-    srv.cfg.tag = 'v1.2.1'; srv.cfg.apiStatus = 500; await relaunch(srv.apiUrl); await sleep(12000);
+    srv.cfg.tag = 'v1.2.2'; srv.cfg.apiStatus = 500; await relaunch(srv.apiUrl); await sleep(12000);
     check('UI13-7 서버 오류(500)면 배너 없음·오류창 없음', !(await banner()).shown && nativeDlg() === '0' && (await ev(`!!document.getElementById('dlKind')`)));
     await relaunch('http://127.0.0.1:9/none'); await sleep(12000);
     check('UI13-8 서버에 닿지 않아도(오프라인) 배너 없음·오류창 없음·앱 정상', !(await banner()).shown && nativeDlg() === '0' && (await ev(`!!document.getElementById('dlKind')`)));
     srv.cfg.apiStatus = 200; srv.cfg.assets = 'noexe'; await relaunch(srv.apiUrl); await sleep(12000);
     check('UI13-9 릴리스에 exe 가 없으면(업데이트 불가) 배너 없음', !(await banner()).shown, srv.hits.slice(-3));
-    await srv.close();
+    // 업데이트 직후 첫 실행 안내: 업데이터가 남기는 표시 파일(updated-notice.json)을 만들어 두고 다시 띄운다
+    const nf = path.join(DATA, 'updates', 'updated-notice.json'); fs.mkdirSync(path.dirname(nf), { recursive: true });
+    fs.writeFileSync(nf, JSON.stringify({ from: '1.2.0', to: '1.2.1' }));
     await relaunch('http://127.0.0.1:9/none');
+    const ud = await waitSel('#dlgUpdated', 20000); const ut = ud ? await text('#dlgUpdated') : '';
+    check('UI13-10 ★업데이트 직후 첫 실행: "1.2.1로 업데이트되었습니다"+이전→현재 버전+바뀐 점 안내', !!ud && /1\.2\.1로 업데이트되었습니다/.test(ut) && /1\.2\.0 → 1\.2\.1/.test(ut) && /바뀐 점/.test(ut) && /업데이트 방법/.test(ut) && !fs.existsSync(nf), ut.replace(/\n/g, ' ').slice(0, 160));
+    await click('#btnUpdatedOk'); await relaunch('http://127.0.0.1:9/none'); await sleep(2500);
+    check('UI13-11 안내는 1회만 — 다음 실행에는 다시 뜨지 않음', !(await exists('#dlgUpdated')));
+    // 현재 버전과 다른 표시 파일(옛 찌꺼기)은 무시하고 지운다
+    fs.writeFileSync(nf, JSON.stringify({ from: '1.0.0', to: '9.9.9' })); await relaunch('http://127.0.0.1:9/none'); await sleep(2500);
+    check('UI13-12 현재 버전과 맞지 않는 표시 파일은 무시(안내 없음)·파일 정리', !(await exists('#dlgUpdated')) && !fs.existsSync(nf));
+    await srv.close();
   }
 
   // ===== UI7: 구독 =====
@@ -278,7 +314,7 @@ try {
     await click('#tabSettings'); await sleep(500);
     await until(async () => (await text('#appVer')) !== '', 30000, 300); // 엔진 버전은 yt-dlp 를 한 번 실행해 읽으므로 재기동 직후에는 몇 초 걸릴 수 있다
     const ver = await text('#engVer');
-    check('UI8 설정 화면: yt-dlp 엔진 버전(날짜 형식)·앱 버전 표시', /^\d{4}\.\d{2}\.\d{2}/.test(ver) && /버전 1\.2\.0/.test(await text('#appVer')), [ver, await text('#appVer')]);
+    check('UI8 설정 화면: yt-dlp 엔진 버전(날짜 형식)·앱 버전 표시', /^\d{4}\.\d{2}\.\d{2}/.test(ver) && /버전 1\.2\.1/.test(await text('#appVer')), [ver, await text('#appVer')]);
     await setVal('#set-conc', '5'); await sleep(500);
     check('UI8 동시 다운로드 수 변경 저장(5)', JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).maxConcurrent === 5);
     await setVal('#set-conc', '99'); await sleep(500);
@@ -439,13 +475,13 @@ try {
       const inner = spawnSync('powershell.exe', ['-NoProfile', '-Command', `[Console]::OutputEncoding=[Text.Encoding]::UTF8; (Get-CimInstance Win32_Process -Filter "Name='goodseedown.exe'" | ? { $_.ExecutablePath -and $_.ExecutablePath.ToLower().Contains('${marker.toLowerCase()}') } | select -First 1).ExecutablePath`], { encoding: 'utf8' }).stdout.trim();
       const a = vi(exe), b = inner ? vi(inner) : {};
       check('UI12-1 배포 exe(런처) VersionInfo 실측: LegalCopyright = "Copyright (c) 2026 굿씨드AI연구소 오경근 박사"·CompanyName = "goodseed AI LAB"', a.legal === 'Copyright (c) 2026 굿씨드AI연구소 오경근 박사' && a.company === 'goodseed AI LAB', a);
-      check('UI12-2 앱 본체(풀린 goodseedown.exe) VersionInfo 실측: 같은 LegalCopyright·CompanyName·ProductName goodseedown·버전 1.2.0', b.legal === 'Copyright (c) 2026 굿씨드AI연구소 오경근 박사' && b.company === 'goodseed AI LAB' && b.product === 'goodseedown' && /^1\.2\.0/.test(b.fileVer || ''), { inner, b });
+      check('UI12-2 앱 본체(풀린 goodseedown.exe) VersionInfo 실측: 같은 LegalCopyright·CompanyName·ProductName goodseedown·버전 1.2.1', b.legal === 'Copyright (c) 2026 굿씨드AI연구소 오경근 박사' && b.company === 'goodseed AI LAB' && b.product === 'goodseedown' && /^1\.2\.1/.test(b.fileVer || ''), { inner, b });
     }
     await restartApp({ GOODSEEDOWN_TEST_OPEN_LOG: OPENLOG });
     await click('#btnAbout');
     const dlg = await waitSel('#dlgAbout', 10000);
     const t = await text('#dlgAbout');
-    check('UI12-3 정보창: "굿씨드AI연구소(goodseed AI LAB) 오경근 박사"·Copyright 줄 표시', dlg && /굿씨드AI연구소\(goodseed AI LAB\) 오경근 박사/.test(t) && /Copyright \(c\) 2026 굿씨드AI연구소 오경근 박사/.test(t) && /1\.2\.0/.test(t), t.replace(/\n/g, ' ').slice(0, 200));
+    check('UI12-3 정보창: "굿씨드AI연구소(goodseed AI LAB) 오경근 박사"·Copyright 줄 표시', dlg && /굿씨드AI연구소\(goodseed AI LAB\) 오경근 박사/.test(t) && /Copyright \(c\) 2026 굿씨드AI연구소 오경근 박사/.test(t) && /1\.2\.1/.test(t), t.replace(/\n/g, ' ').slice(0, 200));
     check('UI12-4 "오경근 박사"는 링크(a)이고 주소는 https://ohkyoungkeun-namecard.vercel.app/', (await ev(`document.getElementById('aboutAuthor').tagName`)) === 'A' && (await ev(`document.getElementById('aboutAuthor').getAttribute('href')`)) === URLA && (await text('#aboutAuthor')) === '오경근 박사', await ev(`document.getElementById('aboutAuthor').getAttribute('href')`));
     const pageUrl0 = await ev(`location.href`); const nPages0 = (await (await fetch(`http://127.0.0.1:${PORT}/json`)).json()).filter(x => x.type === 'page').length;
     check('UI12-5 링크를 누르기 전에는 openExternal 호출 0건', !fs.existsSync(OPENLOG), null);

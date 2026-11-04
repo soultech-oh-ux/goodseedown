@@ -287,7 +287,7 @@ $cfg = Get-Content -LiteralPath $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Js
 [string]$StateDir = $cfg.StateDir; [string]$ExpectedSha = $cfg.ExpectedSha; [string]$ToVersion = $cfg.ToVersion; [string]$FromVersion = $cfg.FromVersion
 [int]$OkWaitSec = $cfg.OkWaitSec
 $log = Join-Path $StateDir 'update-helper.log'
-function Log([string]$m) { try { Add-Content -LiteralPath $log -Value ("{0} {1}" -f (Get-Date -Format 's'), $m) -Encoding UTF8 } catch {} }
+function Log([string]$m) { for ($i = 0; $i -lt 8; $i++) { try { Add-Content -LiteralPath $log -Value ("{0} {1}" -f (Get-Date -Format 's'), $m) -Encoding UTF8 -ErrorAction Stop; break } catch { Start-Sleep -Milliseconds 150 } } }
 function Sha([string]$p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLower() }
 function Fail([string]$msg) {
   Log ('FAILED: ' + $msg)
@@ -422,6 +422,7 @@ function createUpdater(deps) {
   const updatesDir = path.join(base, 'updates');
   const statePath = path.join(base, 'update-state.json');
   const logPath = path.join(updatesDir, 'updater.log');
+  const noticePath = path.join(updatesDir, 'updated-notice.json'); // 업데이트 직후 첫 실행에 한 번 보여 줄 '업데이트되었습니다' 안내용
   let running = false, timer = null;
   const log = m => { try { fs.mkdirSync(updatesDir, { recursive: true }); fs.appendFileSync(logPath, `${new Date().toISOString()} ${m}\n`); } catch { } };
   const win = () => { const w = getMainWindow?.(); return w && !w.isDestroyed() ? w : undefined; };
@@ -591,7 +592,7 @@ ${notes}`, buttons: ['지금 업데이트', '나중에'], defaultId: 0, cancelId
   // 시작 후 자동 확인은 대화상자를 띄우지 않는다. 새 버전이 있으면 정보만 보관하고 화면 맨 위 배너로 알린다.
   // 설치는 사용자가 배너의 [업그레이드]를 눌렀을 때만 시작한다(자동 설치 없음). 최신이거나 확인 실패·오프라인이면 아무 일도 없다.
   let found = null; // lookup() 결과 + 배너에 보낼 info
-  const bannerInfo = () => found && { version: found.rel.version, current, sizeLine: found.sizeLine, patch: !!found.plan };
+  const bannerInfo = () => found && { version: found.rel.version, current, sizeLine: found.sizeLine, patch: !!found.plan, notes: found.rel.notes.length > 1200 ? found.rel.notes.slice(0, 1200) : found.rel.notes };
   async function checkForBanner() {
     if (running) return null;
     running = true;
@@ -619,7 +620,7 @@ ${notes}`, buttons: ['지금 업데이트', '나중에'], defaultId: 0, cancelId
     const pendingPath = path.join(updatesDir, 'pending-update.json');
     const pend = readJson(pendingPath);
     if (pend) {
-      if (pend.to === current) { writeJson(path.join(updatesDir, 'update-ok.json'), { to: current, at: new Date().toISOString() }); log(`update to ${current} confirmed`); }
+      if (pend.to === current) { writeJson(path.join(updatesDir, 'update-ok.json'), { to: current, at: new Date().toISOString() }); writeJson(noticePath, { from: String(pend.from || ''), to: current }); log(`update to ${current} confirmed`); }
       try { fs.rmSync(pendingPath, { force: true }); } catch { }
     }
     const failedPath = path.join(updatesDir, 'update-failed.json');
@@ -631,7 +632,14 @@ ${notes}`, buttons: ['지금 업데이트', '나중에'], defaultId: 0, cancelId
     if (autoCheck) { clearTimeout(timer); timer = setTimeout(() => { checkForBanner(); }, deps.autoDelayMs ?? AUTO_CHECK_DELAY_MS); timer.unref?.(); }
   }
 
-  return { check, onAppReady, checkForBanner, upgrade, getAvailable: bannerInfo, currentVersion: current };
+  // 업데이트 직후 첫 실행 안내: 한 번 돌려주고 파일을 지운다(현재 버전과 맞을 때만).
+  function takeUpdatedNotice() {
+    const n = readJson(noticePath);
+    try { fs.rmSync(noticePath, { force: true }); } catch { }
+    return n && n.to === current ? { from: n.from, to: n.to } : null;
+  }
+
+  return { check, onAppReady, checkForBanner, upgrade, getAvailable: bannerInfo, takeUpdatedNotice, currentVersion: current };
 }
 
 module.exports = { createUpdater, UPDATE_REPO, PATCHES_NAME, UpdateError, sha256File, parsePatchManifest, planPatch, downloadPatched, runHpatchz, parseSemver, compareSemver, getConfig, parseSums, fetchLatestRelease, downloadVerified, openStream, exeAssetName, SUMS_NAME, isRepoValid, spawnApplyHelper, writeHelper, HELPER_PS1, canWriteDir };

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('gsd', {
   engine: { info: () => invoke('engine-info'), checkAndOffer: () => invoke('engine-check') },
   checkAppUpdate: () => invoke('app-update-check'),
   appUpdateInfo: () => invoke('app-update-info'),
+  appUpdateNotice: () => invoke('app-update-notice'),
   appUpdateStart: () => invoke('app-update-start'),
   onAppUpdate: cb => on('app-update-available', cb),
   showLicenses: () => invoke('show-licenses'),

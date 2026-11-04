@@ -14,9 +14,10 @@ const only = arg('--only', ''); const label = arg('--label', 'e2e'); const want 
 const T = path.join(B, 'work', 'ue'); const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const check = (name, ok, detail) => { results.push({ name, ok: !!ok, detail }); console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail !== undefined ? '  ' + JSON.stringify(detail).slice(0, 380) : '')); };
 const sha = f => { try { return crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex'); } catch { return ''; } };
-const OLD_VER = arg('--old', '1.2.0'), NEW_VER = arg('--new', '1.2.1'); // 기본: 1.2.0(배포본) → 1.2.1(시험 빌드). 실제 1.1.0 → 1.2.0 은 --old 1.1.0 --new 1.2.0
+const OLD_VER = arg('--old', '1.2.1'), NEW_VER = arg('--new', '1.2.2'); // 기본: 1.2.0(배포본) → 1.2.1(시험 빌드). 실제 1.1.0 → 1.2.0 은 --old 1.1.0 --new 1.2.0
 const LEGACY = OLD_VER.split('.').map(Number).join('.') < '1.2.0' && OLD_VER !== '1.2.0' && OLD_VER.localeCompare('1.2.0', undefined, { numeric: true }) < 0; // 1.1.x 이하 앱은 배너가 없고 시작할 때 확인창을 띄운다(실제 1.1.0 → 1.2.0 시험용)
-const checkB = (...a) => { if (!LEGACY) check(...a); }; // 배너 전용 검사(옛 앱에는 해당 없음)
+const OLDER_THAN_121 = OLD_VER.localeCompare('1.2.1', undefined, { numeric: true }) < 0; // 1.2.0 이하 앱은 배너 문구·[업데이트 방법] 버튼이 없다
+const checkB = (...a) => { if (!LEGACY && !OLDER_THAN_121) check(...a); }; // 배너 전용 검사(옛 앱에는 해당 없음)
 const distOf = v => path.join(B, '..', 'dist', `goodseedown-${v}-Windows-x64.exe`);
 const realOld = path.join(B, '..', 'dist', `goodseedown-${OLD_VER}-Windows-x64.exe`);
 const realNew = fs.existsSync(distOf(NEW_VER)) ? distOf(NEW_VER) : path.join(B, 'launcher', 'test-fixtures', `goodseedown-${NEW_VER}-Windows-x64.exe`);
@@ -52,6 +53,8 @@ const clickBtn = (name, like = '', tries = 5) => {
 async function noDialog(ms) { const t0 = Date.now(); while (Date.now() - t0 < ms) { const ds = uia('list').filter(w => w.buttons?.length && w.cls === '#32770'); if (ds.length) return ds; await sleep(1500); } return []; }
 async function until(fn, ms, step = 700) { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { const v = await fn(); if (v) return v; } catch { } await sleep(step); } return null; }
 const readJson = p => { try { return JSON.parse(fs.readFileSync(p, 'utf8').replace(/^﻿/, '')); } catch { return null; } };
+// 업데이트가 끝났는지: 도우미 로그의 'update complete' 줄, 또는(그 한 줄이 파일 공유 충돌로 빠질 수 있어) 새 버전의 시작 확인 + 성공 때만 하는 정리(백업 exe 삭제) + 실패 기록 없음
+const updateDone = (data, exePath) => { const hl = readText(path.join(data, 'updates', 'update-helper.log')); if (hl.includes('update complete')) return true; const ul = readText(path.join(data, 'updates', 'updater.log')); let bak = true; try { bak = fs.readdirSync(path.dirname(exePath)).some(f => /\.old-/.test(f)); } catch { } return ul.includes(`update to ${NEW_VER} confirmed`) && hl.includes('exe replaced') && !/FAILED/.test(hl) && !bak && !fs.existsSync(path.join(data, 'updates', 'update-failed.json')); };
 const readText = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 
 let portSeq = 9600 + Math.floor(Math.random() * 200);
@@ -71,7 +74,11 @@ async function startApp(exePath, { api, engineApi, dataRoot, okWait = 60, extraE
   const c = await until(() => cdpConnect(app), 120000, 800);
   app.ready = !!c; app.c = c; return app;
 }
-const cdpConnect = async app => { const f = path.join(app.dataRoot, 'electron', 'DevToolsActivePort'); const port = Number(fs.readFileSync(f, 'utf8').split(String.fromCharCode(10))[0]); if (!port) throw new Error('포트 없음'); return connect(port, t => t.type === 'page' && /goodseedown/.test(t.title)); };
+// 원격 디버깅 포트는 앱이 userData\DevToolsActivePort 에 적는데, 교체 직후 재실행된 새 버전이 이 파일을 다시 쓰지 않는 경우가 드물게 있다(실측: 파일 시각이 옛 앱 시작 시각 그대로).
+// 그때는 이 하네스가 띄운 goodseedown.exe 프로세스가 듣고 있는 포트를 직접 찾아 붙는다(제품 동작과 무관한 시험 도구 쪽 보완).
+const pickPage = t => t.type === 'page' && /goodseedown/.test(t.title);
+const listenPorts = () => { const pids = myProcs().map(p => p.pid); if (!pids.length) return []; const j = psJson(`$p=@(${pids.join(',')}); $r=@(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | ? { $p -contains $_.OwningProcess } | % { $_.LocalPort }); ConvertTo-Json -InputObject $r -Compress`); return Array.isArray(j) ? j : (j ? [j] : []); };
+const cdpConnect = async app => { try { const f = path.join(app.dataRoot, 'electron', 'DevToolsActivePort'); const port = Number(fs.readFileSync(f, 'utf8').split(String.fromCharCode(10))[0]); if (!port) throw new Error('포트 없음'); return await connect(port, pickPage); } catch (e) { for (const port of listenPorts()) { try { return await connect(port, pickPage); } catch { } } throw e; } };
 const appVersion = async app => { try { const c = await cdpConnect(app); const v = await c.ev('window.gsd.appInfo().then(i=>i.version)'); c.close(); return v; } catch { return null; } };
 const reconnect = async app => {
   const c = await until(() => cdpConnect(app), 90000, 800);
@@ -82,7 +89,7 @@ const reconnect = async app => {
   return c;
 };
 // 1.2.0: 시작 시 자동 확인 결과는 확인창이 아니라 화면 맨 위 배너로 알린다(CDP 로 배너 상태를 읽고 [업그레이드]·[나중에]를 누른다).
-const bannerState = async app => { if (LEGACY) { const d = findDialog('업데이트'); return d ? { text: d.texts.join(' '), btn: '지금 업데이트', later: '나중에' } : null; } try { const c = await cdpConnect(app); const v = await c.ev(`(()=>{const b=document.getElementById('updBanner');return b&&!b.hidden&&b.offsetParent!==null?{text:document.getElementById('updText').innerText,btn:document.getElementById('btnUpgrade').textContent,later:document.getElementById('btnUpdLater').textContent}:null})()`); c.close(); return v; } catch { return null; } };
+const bannerState = async app => { if (LEGACY) { const d = findDialog('업데이트'); return d ? { text: d.texts.join(' '), btn: '지금 업데이트', later: '나중에' } : null; } try { const c = await cdpConnect(app); const v = await c.ev(`(()=>{const b=document.getElementById('updBanner');return b&&!b.hidden&&b.offsetParent!==null?{text:[document.getElementById('updText').innerText,(document.getElementById('updHow')||{}).innerText||'',(document.getElementById('updSize')||{}).innerText||''].join(String.fromCharCode(10)),guide:(document.getElementById('btnUpdGuide')||{}).textContent||'',btn:document.getElementById('btnUpgrade').textContent,later:document.getElementById('btnUpdLater').textContent}:null})()`); c.close(); return v; } catch { return null; } };
 const waitBanner = (app, ms = 60000) => until(() => bannerState(app), ms, 800);
 const bannerClick = async (app, id) => { if (LEGACY) { clickBtn(id === 'btnUpgrade' ? '지금 업데이트' : '나중에', '업데이트'); return; } const c = await cdpConnect(app); try { await c.ev(`document.getElementById(${JSON.stringify(id)}).click()`); } finally { c.close(); } };
 const upgradeNow = async app => { const b = await waitBanner(app); if (b) await bannerClick(app, 'btnUpgrade'); return b; };
@@ -117,7 +124,7 @@ try {
     check(`S1-0 ${OLD_VER} 앱 기동(창 준비)·현재 버전 ${OLD_VER}`, app.ready && (await appVersion(app)) === OLD_VER, null);
     const bn = await waitBanner(app);
     const txt = bn ? bn.text : '';
-    checkB('S1-1 새 버전 감지 → 화면 맨 위 배너 "새 버전(1.2.1)이 나왔습니다. 업그레이드하세요."·[업그레이드]·[나중에]', bn && txt.includes(`새 버전(${NEW_VER})이 나왔습니다. 업그레이드하세요.`) && txt.includes(OLD_VER) && bn.btn === '업그레이드' && bn.later === '나중에', bn);
+    checkB('S1-1 새 버전 감지 → 화면 맨 위 배너 "📢 새 버전(X)이 나왔습니다. 업데이트해 주세요."+방법 한 줄·[업그레이드]·[업데이트 방법]·[나중에]', bn && txt.includes(`📢 새 버전(${NEW_VER})이 나왔습니다. 업데이트해 주세요.`) && txt.includes('방법: [업그레이드] 클릭 →') && bn.guide === '업데이트 방법' && txt.includes(OLD_VER) && bn.btn === '업그레이드' && bn.later === '나중에', bn);
     checkB('S1-1a ★배너만 뜨고 확인창(대화상자)은 뜨지 않음(한 번만 묻는 단일 UX) · 클릭 전 새 exe 다운로드 0건(자동 설치 없음)', updDialogs().length === 0 && !srv.hits.some(h => h.startsWith('/dl/')), { dialogs: updDialogs().map(d => d.title), hits: srv.hits });
     checkB('S1-1b 패치 없는 릴리스: 배너에 받을 용량(전체 파일) 표시', /받을 용량: 약 [0-9.]+ MB \(전체 파일\)/.test(txt), txt.split('\n').find(l => l.includes('받을 용량')));
     const tl = []; const tlTimer = setInterval(async () => { let open = false; try { const c = await cdpConnect(app); c.close(); open = true; } catch { } const pr = myProcs(); const by = {}; for (const q of pr) { const m = /bin[\\/](\d+\.\d+\.\d+)/.exec(q.path); const k = m ? m[1] : '?'; by[k] = (by[k] || 0) + 1; } tl.push(`${Math.round((Date.now() - tlT0) / 1000)}s cdp=${open ? 1 : 0} ${JSON.stringify(by)}`); }, 3000); const tlT0 = Date.now();
@@ -127,13 +134,16 @@ try {
     check('S1-4 요청 로그: 새 exe·SHA256SUMS 를 받음, 패치 요청 없음', srv.hits.includes('/dl/' + fullName) && srv.hits.includes('/dl/SHA256SUMS.txt') && !srv.hits.some(h => h.endsWith('.patch')), srv.hits);
     const ulog = readText(path.join(data, 'updates', 'updater.log'));
     check('S1-5 업데이터 로그에 방식 기록(mode=full)', ulog.includes('mode=full'), ulog.split('\n').filter(l => /mode=/.test(l)).slice(-1));
-    const ok = await until(() => (readText(path.join(data, 'updates', 'update-helper.log')).includes('update complete')) || readJson(path.join(data, 'updates', 'update-ok.json')), 180000, 1000);
+    const ok = await until(() => (updateDone(data, oldPath)) || readJson(path.join(data, 'updates', 'update-ok.json')), 180000, 1000);
     check('S1-6 새 버전 재실행·시작 확인(helper "update complete")', !!ok, readText(path.join(data, 'updates', 'update-helper.log')).split('\n').slice(-4));
     const nv = await until(() => appVersion(app), 60000, 1000);
     if (!nv) { console.log('  [진단] 프로세스:', JSON.stringify(myProcs().map(p => p.path.slice(-60)))); console.log('  [진단] 명령줄:', JSON.stringify(psJson("@(Get-CimInstance Win32_Process -Filter \"Name='goodseedown.exe'\" | % { $_.CommandLine.Substring(0,[Math]::Min(220,$_.CommandLine.Length)) }) | ConvertTo-Json -Compress")));  }
     clearInterval(tlTimer); console.log('  [진단] 타임라인:', tl.join(' | '));
     const confirmed = readText(path.join(data, 'updates', 'updater.log')).includes('update to ' + NEW_VER + ' confirmed') && myProcs().some(q => q.path.includes('goodseedown' + String.fromCharCode(92) + 'bin' + String.fromCharCode(92) + NEW_VER + '-'));
     // 원격 디버깅 연결(시험 전용 경로)이 드물게 안 붙는 경우가 있어(재실행된 앱은 정상 동작), 앱 자신이 남긴 '새 버전 시작 확인' 로그와 실행 중인 프로세스 경로로도 판정한다.
+    // 업데이트 직후 첫 실행 안내(새 버전이 한 번만 보여 주는 '업데이트되었습니다')
+    if (nv) { const cn = await cdpConnect(app).catch(() => null); const nt = cn ? await cn.ev(`(document.getElementById('dlgUpdated')||{}).innerText||''`).catch(() => '') : ''; if (cn) cn.close();
+      check('S1-7b ★실제 업데이트 직후 첫 실행: "업데이트되었습니다" 안내 1회(새 버전·이전→현재 버전 표시)', nt.includes(`${NEW_VER}로 업데이트되었습니다`) && nt.includes(`${OLD_VER} → ${NEW_VER}`), nt.slice(0, 100)); }
     check('S1-7 재실행된 앱이 실제로 새 버전(1.0.1) — 화면 연결 또는 앱 로그(update to 1.0.1 confirmed)+1.0.1 패키지 프로세스', nv === NEW_VER || confirmed, { cdpVersion: nv, confirmed });
     check('S1-8 임시 파일(.part·다운로드한 새 exe·백업) 정리', !fs.readdirSync(path.join(data, 'updates')).some(f => /\.part$|\.exe$/.test(f)) && !fs.readdirSync(path.dirname(oldPath)).some(f => /\.old-/.test(f)), { updates: fs.readdirSync(path.join(data, 'updates')), dir: fs.readdirSync(path.dirname(oldPath)) });
     killMine(); await sleep(2000);
@@ -154,7 +164,7 @@ try {
     check('S2-3 요청 로그: 패치만 받고 전체 exe 는 받지 않음', srv.hits.includes('/dl/' + PNAME) && !srv.hits.includes('/dl/' + fullName) && srv.hits.includes('/dl/PATCHES.json'), srv.hits);
     const ulog = readText(path.join(data, 'updates', 'updater.log'));
     check('S2-4 업데이터 로그: mode=patch·내려받은 바이트 = 패치 크기', ulog.includes('mode=patch') && ulog.includes(`downloadedBytes=${pt.buf.length}`), ulog.split('\n').filter(l => /mode=/.test(l)).slice(-1));
-    await until(() => readText(path.join(data, 'updates', 'update-helper.log')).includes('update complete'), 180000, 1000);
+    await until(() => updateDone(data, oldPath), 180000, 1000);
     check('S2-5 새 버전(1.0.1) 재실행 확인', (await until(() => appVersion(app), 60000, 1000)) === NEW_VER);
     killMine(); await sleep(2000);
   }
@@ -170,7 +180,7 @@ try {
     const swapped = await until(() => sha(oldPath) === newSha, 300000, 1000);
     check('S3-1 전송 중 손상된 패치 → 전체 exe 로 자동 폴백해 업데이트 성공', !!swapped && srv.hits.includes('/dl/' + PNAME) && srv.hits.includes('/dl/' + fullName), srv.hits);
     check('S3-2 로그: mode=full-fallback·patchError 기록', readText(path.join(data, 'updates', 'updater.log')).includes('mode=full-fallback'), readText(path.join(data, 'updates', 'updater.log')).split('\n').filter(l => /mode=/.test(l)).slice(-1));
-    await until(() => readText(path.join(data, 'updates', 'update-helper.log')).includes('update complete'), 180000, 1000); killMine(); await sleep(2000);
+    await until(() => updateDone(data, oldPath), 180000, 1000); killMine(); await sleep(2000);
     // 기준 불일치: 현재 exe 용이 아닌 패치만 있는 릴리스 → 처음부터 전체 다운로드(확인창도 '전체 파일')
     reset(); oldPath = freshPortable(); data = newDataRoot();
     srv.cfg.patches = [{ name: PNAME, buf: pt.buf, fromSha256: srv.sha(Buffer.from('다른 버전 exe')) }];
@@ -180,7 +190,7 @@ try {
     await bannerClick(app, 'btnUpgrade');
     const sw2 = await until(() => sha(oldPath) === newSha, 300000, 1000);
     check('S3-4 패치는 받지 않고 전체만 받아 업데이트 성공', !!sw2 && !srv.hits.includes('/dl/' + PNAME) && srv.hits.includes('/dl/' + fullName), srv.hits);
-    await until(() => readText(path.join(data, 'updates', 'update-helper.log')).includes('update complete'), 180000, 1000); killMine(); await sleep(2000);
+    await until(() => updateDone(data, oldPath), 180000, 1000); killMine(); await sleep(2000);
   }
 
   // ===== S4. 나중에 · 수동 확인 · 옛 건너뛰기 상태 =====
@@ -204,6 +214,7 @@ try {
     fs.writeFileSync(path.join(data, 'update-state.json'), JSON.stringify({ skippedVersion: NEW_VER }));
     app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
     const legacy = await waitBanner(app);
+    if (!legacy) console.log('  [진단] S4-5 배너 없음: updater.log =', JSON.stringify(readText(path.join(data, 'updates', 'updater.log')).split(String.fromCharCode(10)).slice(-6)), 'procs', JSON.stringify(myProcs().map(q => q.path.slice(-40))), 'cdp', !!(await cdpConnect(app).catch(() => null)));
     check('S4-5 옛 update-state.json(skippedVersion)이 있어도 정상 기동·배너 표시', app.ready && !!legacy && sha(oldPath) === oldSha, legacy);
     killMine(); await sleep(2000);
   }
@@ -224,7 +235,7 @@ try {
   // ===== S6. 다운로드 진행 중 업데이트 → 일시정지 저장 → 새 버전에서 이어받기 =====
   if (want('S6')) {
     reset(); const oldPath = freshPortable(); const data = newDataRoot(); const out = path.join(data, 'out');
-    const app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data, extraEnv: { GOODSEEDOWN_TEST_YTDLP_ARGS: JSON.stringify(['--limit-rate', '1M']) } });
+    const app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data, extraEnv: { GOODSEEDOWN_TEST_YTDLP_ARGS: JSON.stringify(['--limit-rate', '500K']) } });
     await waitBanner(app); await bannerClick(app, 'btnUpdLater'); await sleep(1500);
     let c = app.c;
     await c.ev(`window.gsd.addDownloads({items:[{url:'https://www.youtube.com/watch?v=SkVqJ1SGeL0'}],options:{kind:'video',quality:'1080',videoFormat:'mp4'}})`);
@@ -240,7 +251,7 @@ try {
     check('S6-3 업데이트 교체 완료', !!swapped, null);
     const saved = readJson(path.join(data, 'jobs.json'));
     check('S6-4 진행 중이던 작업이 일시정지로 저장됨(.part 보존)', saved && saved.jobs[0] && saved.jobs[0].status === 'paused', saved && saved.jobs[0] && [saved.jobs[0].status, Math.round(saved.jobs[0].progress.percent)]);
-    await until(() => readText(path.join(data, 'updates', 'update-helper.log')).includes('update complete'), 180000, 1000);
+    await until(() => updateDone(data, oldPath), 180000, 1000);
     c = await reconnect(app);
     const nv = c && await c.ev('window.gsd.appInfo().then(i=>i.version)');
     check('S6-5 새 버전(1.0.1)에서 목록 복원 — 일시정지 상태·이어받기 안내', nv === NEW_VER && (await c.ev(`window.gsd.listJobs().then(j=>j[0].status+'|'+j[0].note)`)).startsWith('paused|'), nv);
