@@ -1,6 +1,6 @@
 'use strict';
 // goodseedown 자동 업데이트 (GitHub Releases · 공개 저장소)
-// 흐름: 릴리스 조회 → semver 비교 → 한국어 확인창 → 다운로드(진행률·취소) → SHA256SUMS.txt 검증
+// 흐름: 릴리스 조회 → semver 비교 → 한국어 확인(수동 확인=대화상자 / 시작 시 자동 확인=화면 상단 배너) → 다운로드(진행률·취소) → SHA256SUMS.txt 검증
 //       → (앱 종료 후) 보조 스크립트가 포터블 exe 를 교체·재실행 · 실패하면 기존 exe 복원.
 // 차등 업데이트: 릴리스에 PATCHES.json(이전 버전 exe 의 SHA-256 → 패치 파일)이 있고 지금 실행 중인 exe 의 해시가
 //       기준 해시와 같으면 패치만 받아 번들된 hpatchz.exe(HDiffPatch, MIT)로 새 exe 를 만든 뒤 SHA256SUMS.txt 의
@@ -523,53 +523,94 @@ window.setStatus=t=>{document.getElementById('t').textContent=t;};</script>`;
     app.quit();
   }
 
-  async function check({ manual = false } = {}) {
+  // 새 버전이 있는지 조회한다. 있으면 {cfg, rel, plan, sizeLine, fullBytes}, 없거나 확인에 실패하면 null.
+  // manual 일 때만(사용자가 메뉴·설정에서 직접 확인) 결과를 대화상자로 알린다. 자동 확인은 조용히 null 을 돌려준다.
+  async function lookup({ manual }) {
+    const cfg = getConfig(env);
+    if (!cfg.configured) {
+      log('update repo not configured; skipped');
+      if (manual) await box({ type: 'info', message: '업데이트 저장소가 아직 설정되지 않았습니다.', detail: '이 버전에는 업데이트 배포처가 지정되어 있지 않아 업데이트를 확인할 수 없습니다.', buttons: ['확인'] });
+      return null;
+    }
+    const ac = new AbortController(); const guard = setTimeout(() => ac.abort(), API_TIMEOUT_MS + 2000);
+    let rel;
+    try { rel = await fetchLatestRelease(cfg, { signal: ac.signal, userAgent }); }
+    catch (e) {
+      log(`check failed: ${e.code || ''} ${e.message}`);
+      if (manual) await box({ type: 'warning', message: '업데이트 정보를 가져오지 못했습니다.', detail: `인터넷 연결을 확인한 뒤 다시 시도해주세요.
+(${e.message})`, buttons: ['확인'] });
+      return null;
+    } finally { clearTimeout(guard); }
+    if (!rel) { log('no usable release'); if (manual) await box({ type: 'info', message: '확인할 수 있는 릴리스가 없습니다.', buttons: ['확인'] }); return null; }
+    const cmp = compareSemver(rel.version, current);
+    if (!(cmp > 0)) {
+      log(`no update: latest=${rel.version} current=${current}`);
+      if (manual) await box({ type: 'info', message: '현재 최신 버전을 사용하고 있습니다.', detail: `현재 버전: ${current}
+최신 릴리스: ${rel.version}`, buttons: ['확인'] });
+      return null;
+    }
+    const hasAssets = rel.assets.some(a => a.name === exeAssetName(rel.version)) && rel.assets.some(a => a.name === SUMS_NAME);
+    if (!hasAssets) {
+      log(`release ${rel.version} lacks assets`);
+      if (manual) await box({ type: 'warning', message: `새 버전 ${rel.version} 의 배포 파일이 아직 준비되지 않았습니다.`, detail: `${exeAssetName(rel.version)} 와 ${SUMS_NAME} 이 모두 올라온 뒤 다시 확인해주세요.`, buttons: ['확인'] });
+      return null;
+    }
+    const launcherForPlan = String(env.GOODSEEDOWN_LAUNCHER_EXE || '').trim();
+    const plan = launcherForPlan ? await planPatch(cfg, rel, { currentExe: launcherForPlan, hpatchz, userAgent, log }) : null;
+    const fullBytes = rel.assets.find(a => a.name === exeAssetName(rel.version))?.size || 0;
+    const sizeLine = plan ? `받을 용량: 약 ${fmtSize(plan.patchBytes)} (변경된 부분만 · 전체 ${fmtSize(plan.fullBytes || fullBytes)})` : (fullBytes ? `받을 용량: 약 ${fmtSize(fullBytes)} (전체 파일)` : '');
+    log(`update available ${rel.version}; ${plan ? `patch ${plan.entry.name} ${plan.patchBytes}B` : `full ${fullBytes}B`}`);
+    return { cfg, rel, plan, sizeLine, fullBytes };
+  }
+
+  // 수동 확인(메뉴 [도움말 > 업데이트 확인]·설정의 [앱 업데이트 확인]): 결과를 대화상자로 알리고, 있으면 릴리스 노트와 함께 묻는다.
+  async function check({ manual = true } = {}) {
     if (running) { if (manual) await box({ type: 'info', message: '이미 업데이트를 확인하거나 진행하는 중입니다.', buttons: ['확인'] }); return; }
     running = true;
     try {
-      const cfg = getConfig(env);
-      if (!cfg.configured) {
-        log('update repo not configured; skipped');
-        if (manual) await box({ type: 'info', message: '업데이트 저장소가 아직 설정되지 않았습니다.', detail: '이 버전에는 업데이트 배포처가 지정되어 있지 않아 업데이트를 확인할 수 없습니다.', buttons: ['확인'] });
-        return;
-      }
-      const ac = new AbortController(); const guard = setTimeout(() => ac.abort(), API_TIMEOUT_MS + 2000);
-      let rel;
-      try { rel = await fetchLatestRelease(cfg, { signal: ac.signal, userAgent }); }
-      catch (e) {
-        log(`check failed: ${e.code || ''} ${e.message}`);
-        if (manual) await box({ type: 'warning', message: '업데이트 정보를 가져오지 못했습니다.', detail: `인터넷 연결을 확인한 뒤 다시 시도해주세요.\n(${e.message})`, buttons: ['확인'] });
-        return;
-      } finally { clearTimeout(guard); }
-      if (!rel) { log('no usable release'); if (manual) await box({ type: 'info', message: '확인할 수 있는 릴리스가 없습니다.', buttons: ['확인'] }); return; }
-      const cmp = compareSemver(rel.version, current);
-      if (!(cmp > 0)) {
-        log(`no update: latest=${rel.version} current=${current}`);
-        if (manual) await box({ type: 'info', message: '현재 최신 버전을 사용하고 있습니다.', detail: `현재 버전: ${current}\n최신 릴리스: ${rel.version}`, buttons: ['확인'] });
-        return;
-      }
-      const state = readJson(statePath) || {};
-      if (!manual && state.skippedVersion === rel.version) { log(`skipped version ${rel.version}`); return; }
-      const hasAssets = rel.assets.some(a => a.name === exeAssetName(rel.version)) && rel.assets.some(a => a.name === SUMS_NAME);
-      if (!hasAssets) {
-        log(`release ${rel.version} lacks assets`);
-        if (manual) await box({ type: 'warning', message: `새 버전 ${rel.version} 의 배포 파일이 아직 준비되지 않았습니다.`, detail: `${exeAssetName(rel.version)} 와 ${SUMS_NAME} 이 모두 올라온 뒤 다시 확인해주세요.`, buttons: ['확인'] });
-        return;
-      }
-      const launcherForPlan = String(env.GOODSEEDOWN_LAUNCHER_EXE || '').trim();
-      const plan = launcherForPlan ? await planPatch(cfg, rel, { currentExe: launcherForPlan, hpatchz, userAgent, log }) : null;
-      const fullBytes = rel.assets.find(a => a.name === exeAssetName(rel.version))?.size || 0;
-      const sizeLine = plan ? `받을 용량: 약 ${fmtSize(plan.patchBytes)} (변경된 부분만 · 전체 ${fmtSize(plan.fullBytes || fullBytes)})` : (fullBytes ? `받을 용량: 약 ${fmtSize(fullBytes)} (전체 파일)` : '');
-      log(`update available ${rel.version}; ${plan ? `patch ${plan.entry.name} ${plan.patchBytes}B` : `full ${fullBytes}B`}`);
-      const notes = rel.notes.trim() ? (rel.notes.length > 1500 ? rel.notes.slice(0, 1500) + '\n…(이하 생략)' : rel.notes) : '(릴리스 노트가 없습니다)';
-      const r = await box({ type: 'question', message: `새 버전 ${rel.version} 이(가) 있습니다.`, detail: `현재 버전: ${current}\n새 버전: ${rel.version}${sizeLine ? '\n' + sizeLine : ''}\n\n릴리스 노트:\n${notes}`, buttons: ['지금 업데이트', '나중에', '이 버전 건너뛰기'], defaultId: 0, cancelId: 1 });
-      if (r.response === 2) { writeJson(statePath, { ...state, skippedVersion: rel.version }); log(`user skipped ${rel.version}`); return; }
+      const f = await lookup({ manual });
+      if (!f) return;
+      const { cfg, rel, plan, sizeLine } = f;
+      const notes = rel.notes.trim() ? (rel.notes.length > 1500 ? rel.notes.slice(0, 1500) + `
+…(이하 생략)` : rel.notes) : '(릴리스 노트가 없습니다)';
+      const r = await box({ type: 'question', message: `새 버전 ${rel.version} 이(가) 있습니다.`, detail: `현재 버전: ${current}
+새 버전: ${rel.version}${sizeLine ? `
+${sizeLine}` : ''}
+
+릴리스 노트:
+${notes}`, buttons: ['지금 업데이트', '나중에'], defaultId: 0, cancelId: 1 });
       if (r.response !== 0) { log('user chose later'); return; }
       await startUpdate(cfg, rel, plan);
     } catch (e) {
       log(`unexpected: ${e.stack || e}`);
       if (manual) { try { await box({ type: 'error', message: '업데이트 확인 중 오류가 발생했습니다.', detail: String(e.message || e), buttons: ['확인'] }); } catch { } }
     } finally { running = false; }
+  }
+
+  // ---------- 새 버전 배너(시작 시 자동 확인) ----------
+  // 시작 후 자동 확인은 대화상자를 띄우지 않는다. 새 버전이 있으면 정보만 보관하고 화면 맨 위 배너로 알린다.
+  // 설치는 사용자가 배너의 [업그레이드]를 눌렀을 때만 시작한다(자동 설치 없음). 최신이거나 확인 실패·오프라인이면 아무 일도 없다.
+  let found = null; // lookup() 결과 + 배너에 보낼 info
+  const bannerInfo = () => found && { version: found.rel.version, current, sizeLine: found.sizeLine, patch: !!found.plan };
+  async function checkForBanner() {
+    if (running) return null;
+    running = true;
+    try {
+      const f = await lookup({ manual: false });
+      found = f;
+      const info = bannerInfo();
+      if (info) { const w = win(); try { w && w.webContents.send('gsd:app-update-available', info); } catch { } }
+      return info;
+    } catch (e) { log(`banner check failed: ${e.stack || e}`); return null; } finally { running = false; }
+  }
+  // 배너의 [업그레이드]: 확인창 없이(버튼 클릭이 확인) 바로 다운로드·검증·교체 흐름으로 들어간다. 진행 중 다운로드 경고·진행창·취소·해시 검증·전체 폴백은 그대로.
+  async function upgrade() {
+    if (running) return { busy: true };
+    if (!found) return { none: true };
+    running = true;
+    try { await startUpdate(found.cfg, found.rel, found.plan); return { started: true }; }
+    catch (e) { log(`upgrade failed: ${e.stack || e}`); try { await box({ type: 'error', message: '업데이트를 시작하지 못했습니다.', detail: String(e.message || e), buttons: ['확인'] }); } catch { } return { error: String(e.message || e) }; }
+    finally { running = false; }
   }
 
   // 새 버전이 처음 뜬 직후(창 표시 뒤) 호출: 교체 결과 표시·마커 기록·자동 확인 예약.
@@ -587,10 +628,10 @@ window.setStatus=t=>{document.getElementById('t').textContent=t;};</script>`;
       try { fs.rmSync(failedPath, { force: true }); } catch { }
       box({ type: 'warning', message: `직전 업데이트(${failed.to || '?'})를 적용하지 못해 기존 버전으로 복원했습니다.`, detail: `사유: ${failed.message || '알 수 없음'}\n현재 버전: ${current}`, buttons: ['확인'] }).catch(() => { });
     }
-    if (autoCheck) { clearTimeout(timer); timer = setTimeout(() => { check({ manual: false }); }, deps.autoDelayMs ?? AUTO_CHECK_DELAY_MS); timer.unref?.(); }
+    if (autoCheck) { clearTimeout(timer); timer = setTimeout(() => { checkForBanner(); }, deps.autoDelayMs ?? AUTO_CHECK_DELAY_MS); timer.unref?.(); }
   }
 
-  return { check, onAppReady, currentVersion: current };
+  return { check, onAppReady, checkForBanner, upgrade, getAvailable: bannerInfo, currentVersion: current };
 }
 
 module.exports = { createUpdater, UPDATE_REPO, PATCHES_NAME, UpdateError, sha256File, parsePatchManifest, planPatch, downloadPatched, runHpatchz, parseSemver, compareSemver, getConfig, parseSums, fetchLatestRelease, downloadVerified, openStream, exeAssetName, SUMS_NAME, isRepoValid, spawnApplyHelper, writeHelper, HELPER_PS1, canWriteDir };

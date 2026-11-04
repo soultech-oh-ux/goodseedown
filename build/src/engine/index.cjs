@@ -56,25 +56,6 @@ function createEngine(opts) {
     addDownloads({ items, options, saveDir, subfolder, indexPrefix, source } = {}) {
       return downloads.addJobs(items, { options: normalizeOptions(options || {}, settings.defaults), saveDir, subfolder: subfolder ? sanitizeName(subfolder) : '', indexPrefix: !!indexPrefix, source });
     },
-    // 스마트 모드: 저장된 기본값으로 곧바로 대기열에 넣는다. 영상이면 분석 없이 바로, 재생목록·채널이면 목록을 읽어 전부(최대 cap개) 넣는다.
-    async smartAdd(url, { cap = 500 } = {}) {
-      const u = normalizeUrl(url); if (!u) throw Object.assign(new Error('올바른 http(s) 주소가 아닙니다.'), { code: 'bad-url' });
-      const cls = Y.classifyUrl(u);
-      const addOne = (target, title, duration) => { const res = downloads.addJobs([{ url: target, title, duration }], { options: settings.defaults, saveDir: settings.saveDir, source: { type: 'single', id: '', title: '' } }); return { kind: 'video', ...res, count: res.added.length }; };
-      // YouTube 영상 주소는 분석 없이 바로 넣는다(영상+재생목록 주소는 그 영상 한 개만).
-      if (cls.site === 'youtube' && (cls.kind === 'video' || cls.kind === 'choice')) return addOne(cls.kind === 'choice' ? Y.videoOnlyUrl(u) : u);
-      // 그 밖(재생목록·채널·다른 사이트)은 분석해서 목록이면 전부 넣는다.
-      const r = await api.analyze(u, { mode: 'auto', end: cap });
-      if (r.type === 'playlist') return api._smartList(r, cap);
-      return addOne(u, r.title, r.duration);
-    },
-    _smartList(r, cap) {
-      const entries = r.entries.filter(e => !e.unavailable).slice(0, cap);
-      const res = downloads.addJobs(entries.map(e => ({ url: e.url, title: e.title, duration: e.duration, index: e.index })), {
-        options: settings.defaults, saveDir: settings.saveDir, subfolder: settings.playlistSubfolder ? r.title : '', indexPrefix: settings.playlistNumberPrefix, source: { type: 'playlist', id: r.id, title: r.title },
-      });
-      return { kind: 'playlist', title: r.title, ...res, count: res.added.length };
-    },
     async shutdown() { subscriptions.stop(); await downloads.shutdown(); },
   };
   downloads.on('job', j => events.emit('job', j));

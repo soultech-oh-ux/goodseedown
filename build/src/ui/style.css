@@ -17,21 +17,29 @@ input[type=text]{min-width:0}
 code{background:#0c120f;padding:1px 6px;border-radius:5px;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:48vw;display:inline-block;vertical-align:bottom}
 h2{margin:0 0 6px;font-size:17px}
 
-.top{display:flex;gap:14px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
+.top{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
 .brand{display:flex;gap:10px;align-items:center;min-width:170px}
 .brand strong{display:block;font-size:16px;letter-spacing:.2px}
 .brand small{color:var(--muted);font-size:11px}
-.urlbar{display:flex;gap:8px;flex:1;min-width:0}
-.urlbar input{flex:1;font-size:14.5px;padding:9px 12px}
-.smart{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;white-space:nowrap;color:var(--muted)}
-.smart input{position:absolute;opacity:0;pointer-events:none}
-.switch{width:38px;height:22px;border-radius:12px;background:#2a3830;position:relative;transition:.15s;border:1px solid var(--line)}
-.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#b8c7bd;transition:.15s}
-.smart input:checked+.switch{background:var(--accent-d);border-color:var(--accent)}
-.smart input:checked+.switch::after{left:18px;background:#fff}
-.smart input:checked~#smartLabel{color:var(--accent);font-weight:600}
-.smart input:focus-visible+.switch{outline:2px solid var(--accent);outline-offset:2px}
+.urlbar{display:flex;gap:8px;flex:1 1 620px;min-width:0;align-items:center}
+.urlbar input{flex:1;min-width:160px;font-size:14.5px;padding:9px 12px}
+.mini{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap}
+.mini select{padding:8px 8px;font-size:13.5px}
+.mini[hidden]{display:none}
+button.go{padding:9px 22px;font-size:15px;white-space:nowrap}
+.urlbar button{white-space:nowrap}
+.busy{color:var(--text);font-size:13px}
+.busy button{margin-left:auto}
+.spinner.sm{width:16px;height:16px;border-width:2px;margin-right:0}
 
+.upd-banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 18px;background:linear-gradient(90deg,#1f6b44,#2f8a58);border-bottom:2px solid var(--accent);color:#fff}
+.upd-banner[hidden]{display:none}
+.upd-ico{font-size:20px;line-height:1}
+.upd-text{flex:1 1 280px;font-size:15.5px;font-weight:700}
+.upd-text small{display:block;font-weight:400;font-size:12.5px;opacity:.9;margin-top:2px}
+button.upd-go{padding:9px 26px;font-size:15px;background:#fff;color:#14452c;border-color:#fff}
+button.upd-go:hover:not(:disabled){background:#e9f9f0;border-color:#e9f9f0}
+button.upd-later{background:transparent;color:#fff;border-color:rgba(255,255,255,.6)}
 .banner{display:flex;gap:10px;align-items:center;padding:8px 18px;background:#183226;border-bottom:1px solid var(--accent-d)}
 .banner[hidden]{display:none}
 .tabs{display:flex;gap:4px;padding:8px 18px 0;border-bottom:1px solid var(--line)}
@@ -102,12 +110,6 @@ main{flex:1;overflow:auto;padding:14px 18px}
 .chips label{border:1px solid var(--line);border-radius:999px;padding:2px 11px;font-size:12.5px;cursor:pointer;color:var(--muted)}
 .chips input{position:absolute;opacity:0}
 .chips label:has(input:checked){border-color:var(--accent);color:var(--text);background:#1b3326}
-.plist{border:1px solid var(--line);border-radius:10px;max-height:220px;overflow:auto;background:#0c120f}
-.plist label{display:flex;gap:8px;padding:5px 10px;border-bottom:1px solid #16201b;align-items:center}
-.plist label span.n{color:var(--muted);min-width:30px;text-align:right}
-.plist label span.t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.plist label span.d{color:var(--muted);font-size:12.5px}
-.plist label.dis{opacity:.5}
 .spinner{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .9s linear infinite;display:inline-block;vertical-align:middle;margin-right:10px}
 @keyframes spin{to{transform:rotate(360deg)}}
 

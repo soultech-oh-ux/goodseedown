@@ -13,14 +13,14 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("goodseed AI LAB")]
 [assembly: AssemblyProduct("goodseedown")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 굿씨드AI연구소 오경근 박사")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace PortableLauncher
 {
     internal static class Program
     {
-        private const string PackageId = "1.1.0-r1";
+        private const string PackageId = "1.2.0-r1";
 
         [STAThread]
         private static int Main(string[] args)

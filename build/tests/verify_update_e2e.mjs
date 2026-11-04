@@ -14,7 +14,9 @@ const only = arg('--only', ''); const label = arg('--label', 'e2e'); const want 
 const T = path.join(B, 'work', 'ue'); const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const check = (name, ok, detail) => { results.push({ name, ok: !!ok, detail }); console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail !== undefined ? '  ' + JSON.stringify(detail).slice(0, 380) : '')); };
 const sha = f => { try { return crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex'); } catch { return ''; } };
-const OLD_VER = arg('--old', '1.1.0'), NEW_VER = arg('--new', '1.1.1'); // 기본: 1.1.0(배포본) → 1.1.1(시험 빌드). 실제 1.0.0 → 1.1.0 은 --old 1.0.0 --new 1.1.0
+const OLD_VER = arg('--old', '1.2.0'), NEW_VER = arg('--new', '1.2.1'); // 기본: 1.2.0(배포본) → 1.2.1(시험 빌드). 실제 1.1.0 → 1.2.0 은 --old 1.1.0 --new 1.2.0
+const LEGACY = OLD_VER.split('.').map(Number).join('.') < '1.2.0' && OLD_VER !== '1.2.0' && OLD_VER.localeCompare('1.2.0', undefined, { numeric: true }) < 0; // 1.1.x 이하 앱은 배너가 없고 시작할 때 확인창을 띄운다(실제 1.1.0 → 1.2.0 시험용)
+const checkB = (...a) => { if (!LEGACY) check(...a); }; // 배너 전용 검사(옛 앱에는 해당 없음)
 const distOf = v => path.join(B, '..', 'dist', `goodseedown-${v}-Windows-x64.exe`);
 const realOld = path.join(B, '..', 'dist', `goodseedown-${OLD_VER}-Windows-x64.exe`);
 const realNew = fs.existsSync(distOf(NEW_VER)) ? distOf(NEW_VER) : path.join(B, 'launcher', 'test-fixtures', `goodseedown-${NEW_VER}-Windows-x64.exe`);
@@ -71,7 +73,20 @@ async function startApp(exePath, { api, engineApi, dataRoot, okWait = 60, extraE
 }
 const cdpConnect = async app => { const f = path.join(app.dataRoot, 'electron', 'DevToolsActivePort'); const port = Number(fs.readFileSync(f, 'utf8').split(String.fromCharCode(10))[0]); if (!port) throw new Error('포트 없음'); return connect(port, t => t.type === 'page' && /goodseedown/.test(t.title)); };
 const appVersion = async app => { try { const c = await cdpConnect(app); const v = await c.ev('window.gsd.appInfo().then(i=>i.version)'); c.close(); return v; } catch { return null; } };
-const reconnect = async app => until(() => cdpConnect(app), 90000, 800);
+const reconnect = async app => {
+  const c = await until(() => cdpConnect(app), 90000, 800);
+  if (!c) { // 진단: 새 버전이 떠 있는데 화면에 못 붙는 경우 — 포트 파일·대상 목록·프로세스를 남긴다
+    let info = {}; try { const f = path.join(app.dataRoot, 'electron', 'DevToolsActivePort'); const port = Number(fs.readFileSync(f, 'utf8').split(String.fromCharCode(10))[0]); info = { port, targets: (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).map(t => [t.type, t.title, t.url.slice(-30)]) }; } catch (e) { info = { err: String(e.message || e) }; }
+    console.log('  [진단] reconnect 실패:', JSON.stringify(info), JSON.stringify(myProcs().map(p => p.path.slice(-50))));
+  }
+  return c;
+};
+// 1.2.0: 시작 시 자동 확인 결과는 확인창이 아니라 화면 맨 위 배너로 알린다(CDP 로 배너 상태를 읽고 [업그레이드]·[나중에]를 누른다).
+const bannerState = async app => { if (LEGACY) { const d = findDialog('업데이트'); return d ? { text: d.texts.join(' '), btn: '지금 업데이트', later: '나중에' } : null; } try { const c = await cdpConnect(app); const v = await c.ev(`(()=>{const b=document.getElementById('updBanner');return b&&!b.hidden&&b.offsetParent!==null?{text:document.getElementById('updText').innerText,btn:document.getElementById('btnUpgrade').textContent,later:document.getElementById('btnUpdLater').textContent}:null})()`); c.close(); return v; } catch { return null; } };
+const waitBanner = (app, ms = 60000) => until(() => bannerState(app), ms, 800);
+const bannerClick = async (app, id) => { if (LEGACY) { clickBtn(id === 'btnUpgrade' ? '지금 업데이트' : '나중에', '업데이트'); return; } const c = await cdpConnect(app); try { await c.ev(`document.getElementById(${JSON.stringify(id)}).click()`); } finally { c.close(); } };
+const upgradeNow = async app => { const b = await waitBanner(app); if (b) await bannerClick(app, 'btnUpgrade'); return b; };
+const updDialogs = () => uia('list').filter(w => w.buttons?.length && w.cls === '#32770' && /업데이트/.test(w.title));
 
 const patchCache = new Map();
 function makePatch(oldFile, newFile) {
@@ -100,12 +115,13 @@ try {
     reset(); const oldPath = freshPortable(); const data = newDataRoot();
     const app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
     check(`S1-0 ${OLD_VER} 앱 기동(창 준비)·현재 버전 ${OLD_VER}`, app.ready && (await appVersion(app)) === OLD_VER, null);
-    const dlg = await waitDialog('업데이트', 60000);
-    const txt = (dlg?.texts || []).join('\n');
-    check('S1-1 새 버전 감지 → 한국어 확인창(새·현재 버전·릴리스 노트·3버튼)', dlg && txt.includes(NEW_VER) && txt.includes(OLD_VER) && txt.includes('새 기능 A') && ['지금 업데이트', '나중에', '이 버전 건너뛰기'].every(b => dlg.buttons.includes(b)), { title: dlg && dlg.title, buttons: dlg && dlg.buttons });
-    check('S1-1b 패치 없는 릴리스: 확인창에 받을 용량(전체 파일) 표시', /받을 용량: 약 [0-9.]+ MB \(전체 파일\)/.test(txt), txt.split('\n').find(l => l.includes('받을 용량')));
+    const bn = await waitBanner(app);
+    const txt = bn ? bn.text : '';
+    checkB('S1-1 새 버전 감지 → 화면 맨 위 배너 "새 버전(1.2.1)이 나왔습니다. 업그레이드하세요."·[업그레이드]·[나중에]', bn && txt.includes(`새 버전(${NEW_VER})이 나왔습니다. 업그레이드하세요.`) && txt.includes(OLD_VER) && bn.btn === '업그레이드' && bn.later === '나중에', bn);
+    checkB('S1-1a ★배너만 뜨고 확인창(대화상자)은 뜨지 않음(한 번만 묻는 단일 UX) · 클릭 전 새 exe 다운로드 0건(자동 설치 없음)', updDialogs().length === 0 && !srv.hits.some(h => h.startsWith('/dl/')), { dialogs: updDialogs().map(d => d.title), hits: srv.hits });
+    checkB('S1-1b 패치 없는 릴리스: 배너에 받을 용량(전체 파일) 표시', /받을 용량: 약 [0-9.]+ MB \(전체 파일\)/.test(txt), txt.split('\n').find(l => l.includes('받을 용량')));
     const tl = []; const tlTimer = setInterval(async () => { let open = false; try { const c = await cdpConnect(app); c.close(); open = true; } catch { } const pr = myProcs(); const by = {}; for (const q of pr) { const m = /bin[\\/](\d+\.\d+\.\d+)/.exec(q.path); const k = m ? m[1] : '?'; by[k] = (by[k] || 0) + 1; } tl.push(`${Math.round((Date.now() - tlT0) / 1000)}s cdp=${open ? 1 : 0} ${JSON.stringify(by)}`); }, 3000); const tlT0 = Date.now();
-    check('S1-2 [지금 업데이트] 클릭', clickBtn('지금 업데이트', '업데이트'));
+    await bannerClick(app, 'btnUpgrade'); check('S1-2 배너의 [업그레이드] 클릭(이 클릭이 사용자 확인 — 별도 확인창 없이 바로 진행)', true);
     const swapped = await until(() => fs.existsSync(oldPath) && sha(oldPath) === newSha, 240000, 1000);
     check('S1-3 교체 완료: 포터블 exe 의 SHA-256 이 새 exe 와 동일', !!swapped, { now: sha(oldPath).slice(0, 12), new: newSha.slice(0, 12) });
     check('S1-4 요청 로그: 새 exe·SHA256SUMS 를 받음, 패치 요청 없음', srv.hits.includes('/dl/' + fullName) && srv.hits.includes('/dl/SHA256SUMS.txt') && !srv.hits.some(h => h.endsWith('.patch')), srv.hits);
@@ -130,9 +146,9 @@ try {
     console.log(`  [정보] 패치 ${PNAME}: ${pt.buf.length}B (전체 ${newBuf.length}B 의 ${(pt.buf.length * 100 / newBuf.length).toFixed(2)}%) — 생성 ${((Date.now() - t0) / 1000).toFixed(0)}s`);
     srv.cfg.patches = [{ name: PNAME, buf: pt.buf, fromSha256: pt.fromSha256 }];
     const app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
-    const dlg = await waitDialog('업데이트', 60000); const txt = (dlg?.texts || []).join('\n');
-    check('S2-1 확인창에 받을 용량(변경된 부분만 · 전체) 표시', /받을 용량: 약 [0-9.]+ (KB|MB) \(변경된 부분만 · 전체 [0-9.]+ MB\)/.test(txt), txt.split('\n').find(l => l.includes('받을 용량')));
-    clickBtn('지금 업데이트', '업데이트');
+    const bn = await waitBanner(app); const txt = bn ? bn.text : '';
+    checkB('S2-1 배너에 받을 용량(변경된 부분만 · 전체) 표시', /받을 용량: 약 [0-9.]+ (KB|MB) \(변경된 부분만 · 전체 [0-9.]+ MB\)/.test(txt), txt.split('\n').find(l => l.includes('받을 용량')));
+    await bannerClick(app, 'btnUpgrade');
     const swapped = await until(() => sha(oldPath) === newSha, 240000, 1000);
     check('S2-2 교체 완료: SHA-256 이 새 exe 와 동일(패치 적용 결과가 전체 파일과 같음)', !!swapped, { now: sha(oldPath).slice(0, 12) });
     check('S2-3 요청 로그: 패치만 받고 전체 exe 는 받지 않음', srv.hits.includes('/dl/' + PNAME) && !srv.hits.includes('/dl/' + fullName) && srv.hits.includes('/dl/PATCHES.json'), srv.hits);
@@ -150,7 +166,7 @@ try {
     const bad = Buffer.from(pt.buf); bad[Math.floor(bad.length / 2)] ^= 0xff;
     srv.cfg.patches = [{ name: PNAME, buf: bad, fromSha256: pt.fromSha256, manifestSha: srv.sha(pt.buf) }];
     let app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
-    await waitDialog('업데이트', 60000); clickBtn('지금 업데이트', '업데이트');
+    await upgradeNow(app);
     const swapped = await until(() => sha(oldPath) === newSha, 300000, 1000);
     check('S3-1 전송 중 손상된 패치 → 전체 exe 로 자동 폴백해 업데이트 성공', !!swapped && srv.hits.includes('/dl/' + PNAME) && srv.hits.includes('/dl/' + fullName), srv.hits);
     check('S3-2 로그: mode=full-fallback·patchError 기록', readText(path.join(data, 'updates', 'updater.log')).includes('mode=full-fallback'), readText(path.join(data, 'updates', 'updater.log')).split('\n').filter(l => /mode=/.test(l)).slice(-1));
@@ -159,30 +175,36 @@ try {
     reset(); oldPath = freshPortable(); data = newDataRoot();
     srv.cfg.patches = [{ name: PNAME, buf: pt.buf, fromSha256: srv.sha(Buffer.from('다른 버전 exe')) }];
     app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
-    const dlg = await waitDialog('업데이트', 60000); const txt = (dlg?.texts || []).join('\n');
-    check('S3-3 기준 해시 불일치 → 확인창은 전체 파일 용량으로 표시', /\(전체 파일\)/.test(txt) && !/변경된 부분만/.test(txt), txt.split('\n').find(l => l.includes('받을 용량')));
-    clickBtn('지금 업데이트', '업데이트');
+    const bn3 = await waitBanner(app); const txt = bn3 ? bn3.text : '';
+    checkB('S3-3 기준 해시 불일치 → 배너는 전체 파일 용량으로 표시', /\(전체 파일\)/.test(txt) && !/변경된 부분만/.test(txt), txt.split('\n').find(l => l.includes('받을 용량')));
+    await bannerClick(app, 'btnUpgrade');
     const sw2 = await until(() => sha(oldPath) === newSha, 300000, 1000);
     check('S3-4 패치는 받지 않고 전체만 받아 업데이트 성공', !!sw2 && !srv.hits.includes('/dl/' + PNAME) && srv.hits.includes('/dl/' + fullName), srv.hits);
     await until(() => readText(path.join(data, 'updates', 'update-helper.log')).includes('update complete'), 180000, 1000); killMine(); await sleep(2000);
   }
 
-  // ===== S4. 나중에 · 건너뛰기 =====
+  // ===== S4. 나중에 · 수동 확인 · 옛 건너뛰기 상태 =====
   if (want('S4')) {
     reset(); const oldPath = freshPortable(); const data = newDataRoot();
     let app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
-    await waitDialog('업데이트', 60000); clickBtn('나중에', '업데이트'); await sleep(2500);
-    check('S4-1 [나중에] → 교체 없음·앱 계속 사용 가능', sha(oldPath) === oldSha && (await appVersion(app)) === OLD_VER && !srv.hits.includes('/dl/' + fullName), null);
+    await waitBanner(app); await bannerClick(app, 'btnUpdLater'); await sleep(2500);
+    check('S4-1 배너 [나중에] → 배너 숨김·교체 없음·앱 계속 사용 가능·다운로드 요청 0건', !(await bannerState(app)) && sha(oldPath) === oldSha && (await appVersion(app)) === OLD_VER && !srv.hits.some(h => h.startsWith('/dl/')), srv.hits);
+    // 수동 확인(설정의 [앱 업데이트 확인])은 예전처럼 릴리스 노트가 있는 확인창을 띄운다(사용자가 직접 누른 확인) — [지금 업데이트][나중에] 두 버튼
+    app.c.ev(`document.getElementById('tabSettings').click()`); await sleep(500); app.c.ev(`document.getElementById('btnAppCheck').click()`).catch(() => { });
+    const md = await waitDialog('업데이트', 30000); const mtxt = (md?.texts || []).join('\n');
+    check('S4-2 수동 확인 → 확인창(새·현재 버전·릴리스 노트·[지금 업데이트][나중에])', md && mtxt.includes(NEW_VER) && mtxt.includes('새 기능 A') && md.buttons.includes('지금 업데이트') && md.buttons.includes('나중에') && !md.buttons.includes('이 버전 건너뛰기'), md && md.buttons);
+    clickBtn('나중에', '업데이트'); await sleep(2000);
+    check('S4-3 수동 확인에서 [나중에] → 교체 없음', sha(oldPath) === oldSha && !srv.hits.some(h => h.startsWith('/dl/')), srv.hits);
     killMine(); await sleep(2500);
     app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
-    const again = await waitDialog('업데이트', 60000);
-    check('S4-2 [나중에] 뒤 다음 실행에 다시 안내', !!again, null);
-    clickBtn('이 버전 건너뛰기', '업데이트'); await sleep(2500);
-    check('S4-3 [이 버전 건너뛰기] → 상태 파일에 기록·교체 없음', readJson(path.join(data, 'update-state.json'))?.skippedVersion === NEW_VER && sha(oldPath) === oldSha, readJson(path.join(data, 'update-state.json')));
+    const again = await waitBanner(app);
+    check('S4-4 [나중에] 뒤 다음 실행에는 배너가 다시 보임', !!again, again);
     killMine(); await sleep(2500);
+    // 1.1.x 가 남긴 '건너뛴 버전' 상태 파일이 있어도 앱이 정상 동작하고 배너가 뜬다(건너뛰기는 폐지)
+    fs.writeFileSync(path.join(data, 'update-state.json'), JSON.stringify({ skippedVersion: NEW_VER }));
     app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
-    const none = await noDialog(25000);
-    check('S4-4 건너뛴 버전은 다음 실행에서 안내하지 않음(25초 관찰)', none.length === 0 && sha(oldPath) === oldSha, none.map(d => d.title));
+    const legacy = await waitBanner(app);
+    check('S4-5 옛 update-state.json(skippedVersion)이 있어도 정상 기동·배너 표시', app.ready && !!legacy && sha(oldPath) === oldSha, legacy);
     killMine(); await sleep(2000);
   }
 
@@ -190,7 +212,7 @@ try {
   if (want('S5')) {
     reset(); srv.cfg.sums = 'bad'; const oldPath = freshPortable(); const data = newDataRoot();
     const app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
-    await waitDialog('업데이트', 60000); clickBtn('지금 업데이트', '업데이트');
+    await upgradeNow(app);
     const err = await waitDialog('업데이트', 90000).then(async d => { for (let i = 0; i < 60; i++) { const x = findDialog('업데이트'); if (x && /검증하지 못해/.test(x.texts.join(''))) return x; await sleep(1000); } return null; });
     check('S5-1 해시가 SHA256SUMS 와 다르면 "검증하지 못해 업데이트를 중단" 오류창(내려받은 파일 삭제 안내)', !!err && /삭제/.test(err.texts.join('')), err && err.texts);
     clickBtn('확인', '업데이트'); await sleep(2000);
@@ -203,7 +225,7 @@ try {
   if (want('S6')) {
     reset(); const oldPath = freshPortable(); const data = newDataRoot(); const out = path.join(data, 'out');
     const app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data, extraEnv: { GOODSEEDOWN_TEST_YTDLP_ARGS: JSON.stringify(['--limit-rate', '1M']) } });
-    await waitDialog('업데이트', 60000); clickBtn('나중에', '업데이트'); await sleep(1500);
+    await waitBanner(app); await bannerClick(app, 'btnUpdLater'); await sleep(1500);
     let c = app.c;
     await c.ev(`window.gsd.addDownloads({items:[{url:'https://www.youtube.com/watch?v=SkVqJ1SGeL0'}],options:{kind:'video',quality:'1080',videoFormat:'mp4'}})`);
     const prog = await until(() => c.ev(`window.gsd.listJobs().then(j=>j[0]&&j[0].status==='downloading'&&j[0].progress.percent>=6?j[0].progress.percent:0)`), 90000, 800);
@@ -235,7 +257,7 @@ try {
     reset(); const oldPath = freshPortable(); const data = newDataRoot();
     const badBuf = fs.readFileSync(badNew); srv.cfg.exe = badBuf;
     const app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data, okWait: 15 });
-    await waitDialog('업데이트', 60000); clickBtn('지금 업데이트', '업데이트');
+    await upgradeNow(app);
     const hlog = () => readText(path.join(data, 'updates', 'update-helper.log'));
     const failedLog = await until(() => /FAILED: new version did not report/.test(hlog()) && /rollback: old exe restored/.test(hlog()), 240000, 1000);
     check('S7-1 새 버전이 시작을 보고하지 않으면 도우미가 실패를 기록하고 복원(helper 로그)', !!failedLog, hlog().split(String.fromCharCode(10)).slice(-6));
@@ -253,18 +275,27 @@ try {
     reset(); srv.cfg.apiStatus = 500; let oldPath = freshPortable(); let data = newDataRoot();
     let app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
     const none = await noDialog(20000);
-    check('S8-1 서버 오류(500) → 시작할 때 조용히 건너뜀(안내창 없음)·앱 정상', none.length === 0 && (await appVersion(app)) === OLD_VER && /check failed/.test(readText(path.join(data, 'updates', 'updater.log'))), readText(path.join(data, 'updates', 'updater.log')).split('\n').slice(-2));
+    check('S8-1 서버 오류(500) → 시작할 때 조용히 건너뜀(안내창·배너 없음)·앱 정상', none.length === 0 && !(await bannerState(app)) && (await appVersion(app)) === OLD_VER && /check failed/.test(readText(path.join(data, 'updates', 'updater.log'))), readText(path.join(data, 'updates', 'updater.log')).split('\n').slice(-2));
     killMine(); await sleep(2000);
     reset(); srv.cfg.assets = 'noexe'; oldPath = freshPortable(); data = newDataRoot();
     app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
     const none2 = await noDialog(20000);
-    check('S8-2 릴리스에 exe 가 없으면 안내하지 않음(업데이트 불가)', none2.length === 0 && /lacks assets/.test(readText(path.join(data, 'updates', 'updater.log'))), readText(path.join(data, 'updates', 'updater.log')).split('\n').slice(-2));
+    check('S8-2 릴리스에 exe 가 없으면 안내하지 않음(업데이트 불가·배너 없음)', none2.length === 0 && !(await bannerState(app)) && /lacks assets/.test(readText(path.join(data, 'updates', 'updater.log'))), readText(path.join(data, 'updates', 'updater.log')).split('\n').slice(-2));
     killMine(); await sleep(2000);
     reset(); oldPath = freshPortable(); data = newDataRoot();
     app = await startApp(oldPath, { dataRoot: data, repoEnv: '<owner>/goodseedown' });
     const none3 = await noDialog(15000);
-    check('S8-3 UPDATE_REPO 미설정(저장소 값이 <owner> 자리표시) → 자동 확인을 건너뜀·안내창 없음', none3.length === 0 && /not configured/.test(readText(path.join(data, 'updates', 'updater.log'))), readText(path.join(data, 'updates', 'updater.log')).split('\n').slice(-2));
+    check('S8-3 UPDATE_REPO 미설정(저장소 값이 <owner> 자리표시) → 자동 확인을 건너뜀·안내창·배너 없음', none3.length === 0 && !(await bannerState(app)) && /not configured/.test(readText(path.join(data, 'updates', 'updater.log'))), readText(path.join(data, 'updates', 'updater.log')).split('\n').slice(-2));
     check('S8-3b 같은 상태에서 수동 확인(설정의 [앱 업데이트 확인]) → "업데이트 저장소가 아직 설정되지 않았습니다" 안내', await (async () => { app.c.ev(`document.getElementById('tabSettings').click()`); await sleep(500); app.c.ev(`document.getElementById('btnAppCheck').click()`).catch(() => { }); const d = await waitDialog('업데이트', 30000); const ok = d && /설정되지 않았습니다/.test(d.texts.join('')); clickBtn('확인', '업데이트'); return ok; })(), null);
+    killMine(); await sleep(2000);
+  }
+
+  // ===== S10. 이미 최신이면 배너 없음(조용히) =====
+  if (want('S10')) {
+    reset(); srv.cfg.tag = 'v' + OLD_VER; const oldPath = freshPortable(); const data = newDataRoot();
+    const app = await startApp(oldPath, { api: srv.apiUrl, dataRoot: data });
+    const none = await noDialog(20000);
+    check('S10-1 서버의 최신 버전이 지금 버전과 같으면 배너·안내창 없음(조용히)·앱 정상', none.length === 0 && !(await bannerState(app)) && (await appVersion(app)) === OLD_VER && /no update: latest=/.test(readText(path.join(data, 'updates', 'updater.log'))), readText(path.join(data, 'updates', 'updater.log')).split('\n').slice(-2));
     killMine(); await sleep(2000);
   }
 

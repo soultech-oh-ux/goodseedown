@@ -1,5 +1,5 @@
 // goodseedown 화면(UI) 종단 시험 — 실제 앱(Electron)을 띄우고 원격 디버깅(CDP)으로 실제 클릭·입력을 하며 결과 파일을 ffprobe 로 확인한다.
-//   --mode exe : 빌드한 포터블 exe(dist\goodseedown-1.1.0-Windows-x64.exe) / --mode dev : electron-base + src (빠른 반복)
+//   --mode exe : 빌드한 포터블 exe(dist\goodseedown-1.2.0-Windows-x64.exe) / --mode dev : electron-base + src (빠른 반복)
 // 앱 데이터 폴더는 격리(GOODSEEDOWN_DATA_ROOT)하고 저장 폴더도 work\vu 안으로 돌린다. 시험 영상은 모두 공개(CC-BY) Blender 영상이다.
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
@@ -15,7 +15,7 @@ const OUT = path.join(W, 'out'); const DATA = path.join(W, 'data');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const limit = (name, detail) => { results.push({ name, ok: true, limited: true, detail }); console.log('LIMIT ' + name + '  ' + JSON.stringify(detail)); }; const check = (name, ok, detail) => { results.push({ name, ok: !!ok, detail }); console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail !== undefined ? '  ' + JSON.stringify(detail).slice(0, 360) : '')); };
 const until = async (fn, ms = 60000, step = 250) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { const v = await fn(); if (v) return v; } catch { } await sleep(step); } return null; };
-const exe = path.join(B, '..', 'dist', 'goodseedown-1.1.0-Windows-x64.exe');
+const exe = path.join(B, '..', 'dist', 'goodseedown-1.2.0-Windows-x64.exe');
 const marker = mode === 'exe' ? '\\goodseedown\\bin\\' : path.join(B, 'electron-base').toLowerCase();
 function mine() { const m = marker.replace(/'/g, "''").toLowerCase(); const r = spawnSync('powershell.exe', ['-NoProfile', '-Command', `@(Get-CimInstance Win32_Process -Filter "Name='goodseedown.exe' OR Name='electron.exe'" | ? { $_.ExecutablePath -and $_.ExecutablePath.ToLower().Contains('${m}') } | % { $_.ProcessId }) -join ','`], { encoding: 'utf8' }); return r.stdout.trim().split(',').filter(Boolean).map(Number); }
 const killMine = () => { for (const p of mine()) { try { process.kill(p); } catch { } } };
@@ -73,31 +73,44 @@ try {
     check('UI1 확인하면 창이 닫히고 설정에 저장됨(다음 실행부터 안 뜸)', !(await exists('#dlgFirstRun')) && st.copyrightAcknowledged === true, st.copyrightAcknowledged);
   } else { await ev("document.getElementById('btnAck')&&document.getElementById('btnAck').click()"); }
 
-  // ===== UI2: 단일 영상 — 분석 → 옵션 → 다운로드 =====
+  // ===== UI2: 단일 영상 — 링크를 붙여넣고 [다운로드] 한 번(분석·옵션 창 없음) =====
   if (want('UI2')) {
-    await submitUrl(V.caminandes3);
-    check('UI2 링크 분석 후 옵션 창 표시(제목·업로더·길이·라이선스)', await waitSel('#dlgVideo', 60000) && /Caminandes 3/.test(await text('#dlgVideo')) && /2:30/.test(await text('#dlgVideo')) && /Creative Commons/.test(await text('#dlgVideo')), (await text('#dlgVideo')).slice(0, 120).replace(/\n/g, ' '));
-    const q = await ev(`[...document.querySelectorAll('#opt-quality option')].map(o=>o.textContent)`);
-    check('UI2 화질 선택지에 8K·4K·1080p·720p 포함', ['8K (4320p)', '4K (2160p)', '1080p (Full HD)', '720p (HD)'].every(x => q.includes(x)) && (await ev(`!!document.getElementById('opt-vfmt-mp4')&&!!document.getElementById('opt-vfmt-mkv')&&!!document.getElementById('opt-afmt-mp3')&&!!document.getElementById('opt-afmt-m4a')&&!!document.getElementById('opt-afmt-ogg')`)), q);
-    await setVal('#opt-quality', '1080'); await click('#opt-vfmt-mp4'); await click('#opt-save-default');
-    await click('#btnOptStart');
+    const labels = await ev(`[...document.querySelectorAll('button')].filter(b=>b.offsetParent!==null).map(b=>b.textContent.trim())`);
+    check('UI2 메인 화면: [분석] 버튼·스마트 모드 스위치 없음, [다운로드]·[구독하기]·형식·화질 선택이 있음', !labels.includes('분석') && !(await exists('#smartToggle')) && !(await exists('.smart')) && (await text('#btnGo')) === '다운로드' && (await text('#btnSubscribe')) === '구독하기' && (await exists('#dlKind')) && (await exists('#dlQuality')), labels);
+    check('UI2 형식 선택지 = 영상 MP4 / MP3 음악, 영상 화질 = 최고·1080p·720p·480p', JSON.stringify(await ev(`[...document.querySelectorAll('#dlKind option')].map(o=>o.textContent)`)) === JSON.stringify(['영상 MP4', 'MP3 음악']) && JSON.stringify(await ev(`[...document.querySelectorAll('#dlQuality option')].map(o=>o.textContent)`)) === JSON.stringify(['최고', '1080p', '720p', '480p']));
+    await setVal('#dlKind', 'mp3'); await sleep(500);
+    check('UI2 형식을 MP3 로 바꾸면 화질 칸이 음질(320/256/192/128kbps)로 바뀌고 설정 기본값에 저장', JSON.stringify(await ev(`[...document.querySelectorAll('#dlQuality option')].map(o=>o.textContent)`)) === JSON.stringify(['320kbps', '256kbps', '192kbps', '128kbps']) && (await text('#dlQualityLbl')) === '음질' && JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).defaults.audioFormat === 'mp3', JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).defaults);
+    await setVal('#dlQuality', '192'); await sleep(400);
+    check('UI2 음질 192 선택이 설정 기본값(mp3Bitrate)에 저장됨', JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).defaults.mp3Bitrate === 192);
+    await setVal('#dlKind', 'video'); await sleep(400); await setVal('#dlQuality', '1080'); await sleep(500);
+    const st0 = JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).defaults;
+    check('UI2 형식 영상·화질 1080 선택이 설정 기본값에 저장됨(kind video·quality 1080·mp4)', st0.kind === 'video' && st0.quality === '1080' && st0.videoFormat === 'mp4', st0);
+    // 입력 오류(고장 입력): 대기열에 아무것도 들어가지 않는다
+    await setVal('#url', ''); await click('#btnGo');
+    check('UI2 빈 칸에서 [다운로드] → "링크를 입력해 주세요." 안내·작업 0개', await until(async () => (await toasts()).some(t => /링크를 입력해 주세요/.test(t)), 5000, 200) && (await cards()).length === 0);
+    await setVal('#url', 'file:///c:/windows/win.ini javascript:alert(1)'); await click('#btnGo');
+    check('UI2 http(s) 가 아닌 입력 → "올바른 http(s) 링크가 아닙니다." 안내·작업 0개', await until(async () => (await toasts()).some(t => /올바른 http\(s\) 링크가 아닙니다/.test(t)), 5000, 200) && (await cards()).length === 0);
+    // 정상: 붙여넣고 [다운로드] 한 번 → 옵션 창 없이 곧바로 대기열
+    await setVal('#url', V.caminandes3);
+    const t0 = Date.now(); await click('#btnGo');
+    const c0 = await waitCard(x => true, 20000); const dt = Date.now() - t0;
+    check('UI2 [다운로드] 한 번 → 분석·옵션 창 없이 바로 대기열(3초 이내)·입력칸 비워짐', !!c0 && !(await exists('.dlg')) && dt < 3000 && (await ev(`document.getElementById('url').value`)) === '', { ms: dt });
     const c = await waitCard(x => x.status === 'completed' && /Caminandes/.test(x.title), 240000);
-    check('UI2 목록에 카드가 생기고 진행 후 "완료" 표시', !!c && c.chip === '완료', c && { chip: c.chip, p1: c.p1 });
+    check('UI2 진행 후 카드가 "완료"', !!c && c.chip === '완료', c && { chip: c.chip, p1: c.p1 });
     const mp4 = filesIn(OUT).find(f => /\.mp4$/.test(f)); const p = mp4 && probe(mp4);
     check('UI2 결과 파일 ffprobe: 1080p H.264 MP4·150초', p && p.height === 1080 && p.vcodec === 'h264' && Math.abs(p.duration - 150) < 2, p);
-    const st = JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8'));
-    check('UI2 "기본값으로 저장" 체크 → 설정에 기본값 저장(MP4·1080)', st.defaults && st.defaults.quality === '1080' && st.defaults.videoFormat === 'mp4', st.defaults);
     check('UI2 완료 카드에 열기·폴더에서 보기·삭제 버튼', JSON.stringify(c.acts) === JSON.stringify(['open', 'folder', 'remove']), c.acts);
-    check('UI2 정리: 탭 배지 등 화면 오류 없음(빈 화면 안내 숨김)', !(await ev(`!document.getElementById('emptyJobs').hidden`)));
   }
 
-  // ===== UI3: 일시정지·이어받기·취소·다시 시작 =====
+  // ===== UI3: 일시정지·이어받기·취소·다시 시작 (Enter 키로 제출, MKV 는 설정 기본값) =====
   if (want('UI3')) {
-    await submitUrl(V.caminandes3); await waitSel('#dlgVideo', 60000);
-    await click('#opt-kind-video'); await setVal('#opt-quality', '1080'); await click('#opt-vfmt-mkv');
-    await click('#btnOptStart');
+    await click('#btnClear');
+    await ev(`window.gsd.setSettings({defaults:{videoFormat:'mkv'}})`); await sleep(500);
+    await setVal('#url', V.caminandes3); await ev(`document.getElementById('url').focus()`);
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
     const run = await waitCard(x => x.status === 'downloading' && /\d+%/.test(x.p1) && parseInt(x.p1) >= 8 && x.acts.includes('pause'), 90000);
-    check('UI3 진행 중 카드: 퍼센트·속도·남은 시간 표시 + [일시정지][취소] 버튼', !!run && /\d+%/.test(run.p1) && /\/s/.test(run.p2) && /남은 시간/.test(run.p2) && run.acts.join() === 'pause,cancel', run && { p1: run.p1, p2: run.p2 });
+    check('UI3 입력칸에서 Enter 만 눌러도 바로 받기 시작(옵션 창 없음)·퍼센트·속도·남은 시간 + [일시정지][취소]', !!run && !(await exists('.dlg')) && /\d+%/.test(run.p1) && /\/s/.test(run.p2) && /남은 시간/.test(run.p2) && run.acts.join() === 'pause,cancel', run && { p1: run.p1, p2: run.p2 });
     await actClick(run.id, 'pause');
     const paused = await waitCard(x => x.id === run.id && x.status === 'paused', 30000);
     check('UI3 [일시정지] → "일시정지" 상태·[이어받기][취소] 버튼', !!paused && paused.chip === '일시정지' && paused.acts.join() === 'resume,cancel', paused && paused.acts);
@@ -116,74 +129,121 @@ try {
     await actClick(run.id, 'retry');
     const done = await waitCard(x => x.id === run.id && x.status === 'completed', 240000);
     const mkv = filesIn(OUT).find(f => /\.mkv$/.test(f)); const p = mkv && probe(mkv);
-    check('UI3 [다시 시작] → 완료·ffprobe 1080p MKV', !!done && p && /matroska/.test(p.format) && p.height === 1080, p);
+    check('UI3 [다시 시작] → 완료·ffprobe 1080p MKV(설정 기본값의 MKV 형식 적용)', !!done && p && /matroska/.test(p.format) && p.height === 1080, p);
+    await ev(`window.gsd.setSettings({defaults:{videoFormat:'mp4'}})`); await sleep(400);
   }
 
-  // ===== UI4: 재생목록 일괄 =====
+  // ===== UI4: 재생목록 링크 → 전체가 하위 폴더로 (분석·선택 창 없음) =====
   if (want('UI4')) {
     await click('#btnClear');
-    await submitUrl(V.playlist);
-    check('UI4 재생목록 분석 → 목록 18개·제목 표시', await waitSel('#dlgPlaylist', 90000) && /Blender Open Movies/.test(await text('#dlgPlaylist')) && (await ev(`document.querySelectorAll('#plist input').length`)) === 18, (await text('#dlgPlaylist')).slice(0, 60).replace(/\n/g, ' '));
-    await setVal('#plFirstN', '3'); await click('#plFirstBtn');
-    check('UI4 "앞에서 3개만 선택" → 3개 선택 표시', /3개 선택/.test(await text('#plCount')), await text('#plCount'));
-    await click('#opt-kind-audio'); await click('#opt-afmt-mp3'); await click('#opt-prefix');
-    await click('#btnOptStart');
-    const three = await until(async () => { const cs = await cards(); return cs.length === 3 && cs.every(c => c.status === 'completed') ? cs : null; }, 300000, 800);
-    const sub = path.join(OUT, 'Blender Open Movies'); const mp3 = fs.existsSync(sub) ? fs.readdirSync(sub).filter(f => /\.mp3$/.test(f)) : [];
-    check('UI4 3개 카드 모두 완료·재생목록 이름 하위 폴더·번호 접두(001 - …)', !!three && mp3.length === 3 && ['001 - ', '002 - ', '003 - '].every(pf => mp3.some(f => f.startsWith(pf))), mp3);
-    check('UI4 카드에 "재생목록: Blender Open Movies" 출처 표시', await ev(`[...document.querySelectorAll('.job .meta')].every(m=>m.textContent.includes('재생목록: Blender Open Movies'))`));
+    await setVal('#dlKind', 'mp3'); await sleep(400); await setVal('#dlQuality', '128'); await sleep(500);
+    await setVal('#url', V.playlist); await click('#btnGo');
+    const all = await until(async () => { const cs = await cards(); return cs.length >= 18 ? cs : null; }, 120000, 600);
+    check('UI4 재생목록 링크 + [다운로드] → 옵션·선택 창 없이 18개 전체가 대기열에 들어감', !!all && all.length === 18 && !(await exists('.dlg')), all && all.length);
+    check('UI4 카드에 "재생목록: Blender Open Movies"·선택한 형식(MP3 128kbps) 표시', await ev(`[...document.querySelectorAll('.job .meta')].every(m=>m.textContent.includes('재생목록: Blender Open Movies')&&m.textContent.includes('MP3 128kbps'))`));
+    const jobs = await ev(`window.gsd.listJobs()`);
+    check('UI4 저장 위치가 재생목록 이름의 하위 폴더(설정 [재생목록 정리] 기본값 켜짐)', jobs.length === 18 && jobs.every(j => /[\\/]Blender Open Movies$/.test(j.outDir)), jobs[0] && { dir: jobs[0].outDir });
+    await ev(`window.gsd.jobsAll('pause')`); await sleep(1500);
+    for (const j of await ev(`window.gsd.listJobs()`)) { if (j.status !== 'canceled' && j.status !== 'completed') { await ev(`window.gsd.job('cancel', ${JSON.stringify(j.id)})`); } }
+    await sleep(2500); await click('#btnClear'); await sleep(600);
+    check('UI4 정리: 시험으로 넣은 18개를 모두 취소·삭제(yt-dlp 남지 않음)', (await cards()).length === 0 && ytdlpProcs() === 0, { n: (await cards()).length, procs: ytdlpProcs() });
+    await setVal('#dlKind', 'video'); await sleep(400); await setVal('#dlQuality', '1080'); await sleep(400);
   }
 
-  // ===== UI5: 자막 =====
+  // ===== UI5: 자막 — 세부 옵션은 설정 화면 기본값이 적용된다 =====
   if (want('UI5')) {
     await click('#btnClear');
-    await submitUrl(V.sintel);
-    await waitSel('#dlgVideo', 90000);
-    check('UI5 영상의 수동 자막 언어 목록이 칩으로 표시(영어·프랑스어 등)', await ev(`document.querySelectorAll('#opt-subs-chips input').length`) >= 29, await ev(`document.querySelectorAll('#opt-subs-chips input').length`));
-    await click('#opt-kind-subs');
-    check('UI5 "자막만" 선택 시 영상 옵션 숨김·자막 옵션 표시', (await ev(`document.querySelector('[data-for="video"]').hidden`)) === true && (await ev(`!document.querySelector('#opt-subs-area .subs-body').hidden`)), null);
-    await ev(`(()=>{for(const v of ['en']){const i=document.querySelector('#opt-subs-chips input[value="'+v+'"]'); i.click();} const k=[...document.querySelectorAll('#opt-subs-chips input')].find(i=>/^ko/.test(i.value)); return !!k})()`);
-    await setVal('#opt-subs-extra', 'ko,en');
-    await click('#btnOptStart');
+    // (a) 자막만: 설정 기본값 kind=subs + en
+    await ev(`window.gsd.setSettings({defaults:{kind:'subs',subs:{enabled:true,langs:['en','ko'],auto:false,mode:'srt'}}})`); await sleep(500);
+    check('UI5 설정 기본값이 "자막만"이면 형식 칸에 "설정값: …"이 따로 표시되고 화질 칸은 숨음', /설정값: 자막만/.test(await ev(`document.getElementById('dlKind').selectedOptions[0].textContent`)) && (await ev(`document.getElementById('dlQualityWrap').hidden`)) === true, await ev(`document.getElementById('dlKind').selectedOptions[0].textContent`));
+    await setVal('#url', V.sintel); await click('#btnGo');
     const c = await waitCard(x => /Sintel/.test(x.title) && ['completed', 'failed'].includes(x.status), 180000);
     const srts = filesIn(OUT).filter(f => /Sintel.*\.srt$/.test(f));
-    check('UI5 자막만 받기 → SRT 파일 생성(영어는 존재, 영상에 없는 한국어는 건너뜀)', !!c && c.status === 'completed' && srts.some(f => /\.en\.srt$/.test(f)), { status: c && c.status, msg: c && c.msg, files: srts.map(f => path.basename(f)) });
+    check('UI5 자막만 받기(설정 기본값) → SRT 생성(영어는 존재, 영상에 없는 한국어는 건너뜀)', !!c && c.status === 'completed' && srts.some(f => /\.en\.srt$/.test(f)), { status: c && c.status, msg: c && c.msg, files: srts.map(f => path.basename(f)) });
     const t = srts[0] && fs.readFileSync(srts[0], 'utf8');
     check('UI5 SRT 내용 형식(번호·시간표)', t && /^\d+\r?\n\d\d:\d\d:\d\d,\d{3} --> /.test(t), t && t.slice(0, 60));
-    // 영상에 합치기
+    // (b) 영상에 합치기: 설정 기본값 video 360 + en 합치기
     await click('#btnClear');
-    await submitUrl(V.spring); await waitSel('#dlgVideo', 90000);
-    await click('#opt-kind-video'); await setVal('#opt-quality', '360'); await click('#opt-vfmt-mp4');
-    await click('#opt-subs-on'); await ev(`document.querySelector('#opt-subs-chips input[value="en"]').click()`); await click('#opt-submode-embed');
-    await click('#btnOptStart');
+    await ev(`window.gsd.setSettings({defaults:{kind:'video',quality:'360',videoFormat:'mp4',subs:{enabled:true,langs:['en'],auto:false,mode:'embed'}}})`); await sleep(500);
+    await setVal('#url', V.spring); await click('#btnGo');
     const c2 = await waitCard(x => /Spring/.test(x.title) && ['completed', 'failed'].includes(x.status), 400000);
     const mp4 = filesIn(OUT).find(f => /Spring.*\.mp4$/.test(f)); const p = mp4 && probe(mp4);
-    check('UI5 영상에 합치기(소프트 자막) → MP4 안에 자막 트랙 1개(ffprobe)·"자막을 찾지 못했다"는 잘못된 안내 없음', !!c2 && c2.status === 'completed' && p && p.subs === 1 && p.height >= 358 && !/찾지 못/.test(c2.msg), { status: c2 && c2.status, msg: c2 && c2.msg, p });
+    check('UI5 영상에 합치기(설정 기본값) → MP4 안에 자막 트랙 1개(ffprobe)·"자막을 찾지 못했다"는 잘못된 안내 없음', !!c2 && c2.status === 'completed' && p && p.subs === 1 && p.height >= 358 && !/찾지 못/.test(c2.msg), { status: c2 && c2.status, msg: c2 && c2.msg, p });
+    await ev(`window.gsd.setSettings({defaults:{kind:'video',quality:'1080',videoFormat:'mp4',subs:{enabled:false,langs:[],auto:false,mode:'srt'}}})`); await sleep(500);
   }
 
-  // ===== UI6: 스마트 모드 =====
+  // ===== UI6: 옛 설정(smartMode 포함) 안전 로드 · 영상+재생목록 주소의 선택 =====
   if (want('UI6')) {
     await click('#btnClear');
-    await click('#smartToggle'); await sleep(500);
-    check('UI6 스마트 모드 켜면 버튼이 "바로 받기"로 바뀜·설정 저장', (await text('#btnGo')) === '바로 받기' && JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).smartMode === true, await text('#btnGo'));
-    const t0 = Date.now(); await submitUrl(V.caminandes3 + '&list=PLav47HAVZMjnTFVZL-aImCQIC0uLZtNCz');
-    const c = await waitCard(x => /Caminandes|youtube/.test(x.title) || true, 20000);
-    const dt = Date.now() - t0;
-    check('UI6 링크 붙여넣고 한 번(Enter/버튼)만 눌렀는데 옵션 창 없이 바로 대기열에 들어감', !!c && !(await exists('.dlg')) && dt < 5000, { ms: dt, title: c && c.title });
-    const done = await waitCard(x => x.status === 'completed', 240000);
-    const files = filesIn(OUT).filter(f => /Caminandes 3.*\.mp4$/.test(f)).length;
-    check('UI6 저장된 기본값(MP4 1080p)대로 받음·영상+재생목록 주소는 영상 한 개만', !!done && (await cards()).length === 1 && files >= 1 && probe(filesIn(OUT).filter(f => /Caminandes 3.*\.mp4$/.test(f)).pop()).height === 1080, (await cards()).length);
-    await click('#smartToggle'); await sleep(300);
-    check('UI6 스마트 모드 끄면 다시 "분석"', (await text('#btnGo')) === '분석', await text('#btnGo'));
+    // 1.1.x 설정 파일(smartMode:true·옛 필드)을 만들어 앱을 다시 띄운다
+    const sp = path.join(DATA, 'settings.json'); const cur = JSON.parse(fs.readFileSync(sp, 'utf8'));
+    try { await Promise.race([cdp.send('Browser.close'), sleep(3000)]); } catch { }
+    await until(() => mine().length === 0, 60000, 500); killMine(); await sleep(1500);
+    fs.writeFileSync(sp, JSON.stringify({ ...cur, smartMode: true, defaults: { kind: 'video', quality: '720', videoFormat: 'mp4', audioFormat: 'mp3', mp3Bitrate: 320, id3: true, subs: { enabled: false, langs: [], auto: false, mode: 'srt' } }, unknownFutureField: 1 }));
+    child = mode === 'exe' ? spawn(exe, [], { env, stdio: 'ignore' }) : spawn(path.join(B, 'electron-base', 'electron.exe'), [path.join(B, 'src')], { env, stdio: 'ignore' });
+    cdp = await until(async () => { try { return await connect(PORT, t => t.type === 'page' && /goodseedown/.test(t.title)); } catch { return null; } }, 120000, 800);
+    ev = cdp.ev; await until(() => ev(`document.readyState==='complete'&&!!document.getElementById('dlKind')`), 30000, 300); await sleep(1500);
+    const mainOk = await ev(`(()=>{const q=document.getElementById('dlQuality');return {kind:document.getElementById('dlKind').value,q:q.value,go:document.getElementById('btnGo').textContent,smart:!!document.getElementById('smartToggle')}})()`);
+    check('UI6 smartMode:true 가 들어 있는 1.1.x 설정 파일로 시작해도 앱이 정상 기동·저장된 기본값(영상 720p)이 형식·화질 칸에 반영, 스마트 모드는 없음', mainOk.kind === 'video' && mainOk.q === '720' && mainOk.go === '다운로드' && !mainOk.smart, mainOk);
+    await setVal('#dlQuality', '480'); await sleep(600);
+    const after = JSON.parse(fs.readFileSync(sp, 'utf8'));
+    check('UI6 설정을 한 번 저장하면 옛 smartMode 필드는 파일에서 사라지고 나머지 설정은 유지(saveDir 등)', after.smartMode === undefined && after.defaults.quality === '480' && after.saveDir === cur.saveDir, { smart: after.smartMode, q: after.defaults.quality });
+    await setVal('#dlQuality', '1080'); await sleep(500);
+    // 영상+재생목록 주소: 선택창 → 이 영상만(대기열 1개)
+    await setVal('#url', V.caminandes3 + '&list=PLav47HAVZMjnTFVZL-aImCQIC0uLZtNCz'); await click('#btnGo');
+    const dlg = await waitSel('#dlgChoice', 15000);
+    check('UI6 영상+재생목록 주소: "이 영상만 / 재생목록 전체" 선택창이 뜸', !!dlg && (await exists('#btnChoiceVideo')) && (await exists('#btnChoiceList')));
+    await click('#btnChoiceVideo');
+    const one = await waitCard(x => true, 20000); await sleep(1500);
+    check('UI6 "이 영상만" → 영상 1개만 대기열(재생목록 전체가 들어가지 않음)', !!one && (await cards()).length === 1, (await cards()).length);
+    await actClick(one.id, 'pause'); await waitCard(x => x.id === one.id && x.status === 'paused', 30000);
+    await actClick(one.id, 'cancel'); await waitSel('.dlg button.primary', 5000); await clickBtnText('취소하기');
+    await waitCard(x => x.id === one.id && x.status === 'canceled', 30000); await actClick(one.id, 'remove'); await sleep(800);
+  }
+
+  // ===== UI13: 새 버전 배너 (가짜 릴리스 서버 — 실제 GitHub 로 나가지 않음) =====
+  if (want('UI13')) {
+    const { createFakeServer } = await import('../fake-release-server.mjs');
+    const srv = await createFakeServer({ exe: Buffer.from('MZ' + 'x'.repeat(8192)), tag: 'v1.2.1', notes: '시험 노트' });
+    const banner = () => ev(`(()=>{const b=document.getElementById('updBanner');return {shown:!!b&&!b.hidden&&b.offsetParent!==null,text:(document.getElementById('updText')||{}).innerText||'',btn:(document.getElementById('btnUpgrade')||{}).textContent||'',later:(document.getElementById('btnUpdLater')||{}).textContent||''}})()`);
+    const nativeDlg = () => spawnSync('powershell.exe', ['-NoProfile', '-Command', `@(Get-Process | ? { $_.MainWindowTitle -like '*업데이트*' }).Count`], { encoding: 'utf8' }).stdout.trim();
+    const relaunch = async api => { try { await Promise.race([cdp.send('Browser.close'), sleep(3000)]); } catch { } try { cdp.close(); } catch { } await until(() => mine().length === 0, 60000, 500); killMine(); await sleep(1500);
+      const e2 = { ...env, GOODSEEDOWN_UPDATE_API: api, GOODSEEDOWN_ENGINE_API: 'http://127.0.0.1:9/none' }; child = mode === 'exe' ? spawn(exe, [], { env: e2, stdio: 'ignore' }) : spawn(path.join(B, 'electron-base', 'electron.exe'), [path.join(B, 'src')], { env: e2, stdio: 'ignore' });
+      cdp = await until(async () => { try { return await connect(PORT, t => t.type === 'page' && /goodseedown/.test(t.title)); } catch { return null; } }, 120000, 800); ev = cdp.ev; await until(() => ev(`document.readyState==='complete'&&!!document.getElementById('updBanner')`), 30000, 300); };
+    // (1) 새 버전 있음
+    await relaunch(srv.apiUrl);
+    const shown = await until(async () => { const b = await banner(); return b.shown ? b : null; }, 40000, 500);
+    check('UI13-1 새 버전(1.2.1) 있음 → 화면 맨 위 배너 "새 버전(1.2.1)이 나왔습니다. 업그레이드하세요."·[업그레이드]·[나중에]', !!shown && /새 버전\(1\.2\.1\)이 나왔습니다\. 업그레이드하세요\./.test(shown.text) && shown.btn === '업그레이드' && shown.later === '나중에', shown);
+    check('UI13-2 배너가 다운로드 화면의 제일 위(헤더보다 위)에 있음', await ev(`(()=>{const b=document.getElementById('updBanner').getBoundingClientRect(), h=document.querySelector('header.top').getBoundingClientRect(); return b.top<h.top && b.top<=1})()`));
+    await sleep(2500);
+    check('UI13-3 ★배너만 뜨고 확인창(네이티브 대화상자)은 따로 뜨지 않음 · 클릭 전에는 새 exe·패치 다운로드 요청 0건(자동 설치 없음)', nativeDlg() === '0' && !srv.hits.some(h => /^\/dl\/goodseedown-/.test(h) || /\.patch$/.test(h)) && !srv.hits.includes('/dl/SHA256SUMS.txt'), { dlg: nativeDlg(), hits: srv.hits });
+    await click('#btnUpdLater'); await sleep(400);
+    check('UI13-4 [나중에] → 배너가 사라지고(이번 실행 동안 숨김) 다운로드 요청 없음', !(await banner()).shown && !srv.hits.some(h => /^\/dl\//.test(h)), srv.hits);
+    // (2) 다음 실행에는 다시 보임
+    await relaunch(srv.apiUrl);
+    const again = await until(async () => { const b = await banner(); return b.shown ? b : null; }, 40000, 500);
+    check('UI13-5 [나중에] 뒤 다음 실행에는 배너가 다시 보임', !!again, again);
+    // (3) 최신(같은 버전)·확인 실패 → 배너 없음
+    srv.cfg.tag = 'v1.2.0'; await relaunch(srv.apiUrl); await sleep(12000);
+    check('UI13-6 최신 버전이면 배너 없음(조용히)', !(await banner()).shown && nativeDlg() === '0', await banner());
+    srv.cfg.tag = 'v1.2.1'; srv.cfg.apiStatus = 500; await relaunch(srv.apiUrl); await sleep(12000);
+    check('UI13-7 서버 오류(500)면 배너 없음·오류창 없음', !(await banner()).shown && nativeDlg() === '0' && (await ev(`!!document.getElementById('dlKind')`)));
+    await relaunch('http://127.0.0.1:9/none'); await sleep(12000);
+    check('UI13-8 서버에 닿지 않아도(오프라인) 배너 없음·오류창 없음·앱 정상', !(await banner()).shown && nativeDlg() === '0' && (await ev(`!!document.getElementById('dlKind')`)));
+    srv.cfg.apiStatus = 200; srv.cfg.assets = 'noexe'; await relaunch(srv.apiUrl); await sleep(12000);
+    check('UI13-9 릴리스에 exe 가 없으면(업데이트 불가) 배너 없음', !(await banner()).shown, srv.hits.slice(-3));
+    await srv.close();
+    await relaunch('http://127.0.0.1:9/none');
   }
 
   // ===== UI7: 구독 =====
   if (want('UI7')) {
     await click('#btnClear');
-    await submitUrl(V.playlist); await waitSel('#dlgPlaylist', 90000);
-    await click('#btnSubscribe');
+    await setVal('#url', V.caminandes3); await click('#btnSubscribe');
+    check('UI7 영상 한 개 링크는 구독할 수 없다는 안내·구독 0개(고장 입력)', await until(async () => (await toasts()).some(t => /영상 한 개의 링크는 구독할 수 없습니다/.test(t)), 15000, 300) && (await ev(`document.querySelectorAll('.sub').length`)) === 0, await toasts());
+    await setVal('#url', V.playlist); await click('#btnSubscribe');
     await until(() => ev(`document.querySelectorAll('.sub').length`), 30000, 300);
-    check('UI7 [구독하기] → 구독 탭에 재생목록 구독 등록(본 영상 18개)', (await ev(`document.querySelectorAll('.sub').length`)) === 1 && /Blender Open Movies/.test(await text('.sub')) && /본 영상 18개/.test(await text('.sub')), (await text('.sub')).replace(/\n/g, ' ').slice(0, 140));
+    check('UI7 분석 없이 [구독하기] 한 번 → 구독 탭에 재생목록 구독 등록(본 영상 18개)·입력칸 비워짐', (await ev(`document.querySelectorAll('.sub').length`)) === 1 && /Blender Open Movies/.test(await text('.sub')) && /본 영상 18개/.test(await text('.sub')) && (await ev(`document.getElementById('url').value`)) === '', (await text('.sub')).replace(/\n/g, ' ').slice(0, 140));
     check('UI7 처음 구독할 때 이미 있는 영상은 받지 않음(대기열 비어 있음)', (await cards()).length === 0, (await cards()).length);
     await ev(`document.querySelector('#tabSubs')&&true`);
     await click('[data-act="sub-check"]');
@@ -218,7 +278,7 @@ try {
     await click('#tabSettings'); await sleep(500);
     await until(async () => (await text('#appVer')) !== '', 30000, 300); // 엔진 버전은 yt-dlp 를 한 번 실행해 읽으므로 재기동 직후에는 몇 초 걸릴 수 있다
     const ver = await text('#engVer');
-    check('UI8 설정 화면: yt-dlp 엔진 버전(날짜 형식)·앱 버전 표시', /^\d{4}\.\d{2}\.\d{2}/.test(ver) && /버전 1\.1\.0/.test(await text('#appVer')), [ver, await text('#appVer')]);
+    check('UI8 설정 화면: yt-dlp 엔진 버전(날짜 형식)·앱 버전 표시', /^\d{4}\.\d{2}\.\d{2}/.test(ver) && /버전 1\.2\.0/.test(await text('#appVer')), [ver, await text('#appVer')]);
     await setVal('#set-conc', '5'); await sleep(500);
     check('UI8 동시 다운로드 수 변경 저장(5)', JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).maxConcurrent === 5);
     await setVal('#set-conc', '99'); await sleep(500);
@@ -227,7 +287,7 @@ try {
     check('UI8 구독 확인 주기 변경 저장(30분)', JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).subscriptionIntervalMin === 30);
     await click('#def-kind-audio'); await click('#def-afmt-m4a'); await sleep(400);
     const d = JSON.parse(fs.readFileSync(path.join(DATA, 'settings.json'), 'utf8')).defaults;
-    check('UI8 스마트 모드 기본값(음성 M4A) 변경 저장', d.kind === 'audio' && d.audioFormat === 'm4a', d);
+    check('UI8 다운로드 기본값(음성 M4A) 변경 저장', d.kind === 'audio' && d.audioFormat === 'm4a', d);
     check('UI8 엔진·앱 업데이트 확인 버튼, 라이선스·저작권 안내 버튼 존재', await ev(`['btnEngineCheck','btnAppCheck','btnNotice2','btnLicenses'].every(i=>!!document.getElementById(i))`));
     await click('#tabDownloads');
   }
@@ -246,17 +306,10 @@ try {
     spawnSync('powershell.exe', ['-NoProfile', '-Command', `Set-Clipboard -Value 'https://www.youtube.com/watch?v=WhWc3b3KhnY'`]);
     await sleep(6000);
     check('UI9 ★클립보드에 링크를 복사해도 감지 배너·입력칸 자동 채움 없음, 다운로드 요청 0건(작업 수 그대로·yt-dlp 실행 0)', !(await exists('#clipBanner')) && (await ev(`document.getElementById('url').value`)) === '' && (await ev(`window.gsd.listJobs().then(a=>a.length)`)) === jobsBefore && ytdlpProcs() === 0, { banner: await exists('#clipBanner'), url: await ev(`document.getElementById('url').value`), jobs: jobsBefore, procs: ytdlpProcs() });
-    await click('#smartToggle'); await sleep(400);
-    spawnSync('powershell.exe', ['-NoProfile', '-Command', `Set-Clipboard -Value 'https://www.youtube.com/watch?v=eRsGyueVLvQ'`]);
-    await sleep(5000);
-    check('UI9 ★스마트 모드를 켜 두고 클립보드에 링크를 복사해도 다운로드 요청 0건(스마트 모드는 붙여넣은 링크를 제출했을 때만)', (await ev(`window.gsd.listJobs().then(a=>a.length)`)) === jobsBefore && ytdlpProcs() === 0 && (await ev(`document.getElementById('url').value`)) === '', { procs: ytdlpProcs() });
-    await click('#smartToggle'); await sleep(300);
     // [붙여넣기] 버튼을 눌러 입력칸에 넣기만 해서는 다운로드가 시작되지 않고, [분석]을 눌러도 옵션 창에서 [다운로드]를 누르기 전에는 0건
     await click('#btnPaste'); await until(() => ev(`document.getElementById('url').value`), 5000, 150);
-    check('UI9 [붙여넣기]를 눌러 입력칸에 넣기만 한 상태: 다운로드 요청 0건', (await ev(`document.getElementById('url').value`)).includes('eRsGyueVLvQ') && (await ev(`window.gsd.listJobs().then(a=>a.length)`)) === jobsBefore && ytdlpProcs() === 0);
-    await click('#btnGo'); const od = await waitSel('#dlgVideo', 90000); await sleep(1500);
-    check('UI9 [분석] 후 옵션 창이 떠 있는 동안에도 다운로드 요청 0건(옵션 창의 [다운로드]를 눌러야 시작)', od && (await ev(`window.gsd.listJobs().then(a=>a.length)`)) === jobsBefore, null);
-    await click('#btnOptCancel'); await sleep(500); await ev(`document.getElementById('url').value=''`);
+    check('UI9 [붙여넣기]를 눌러 입력칸에 넣기만 한 상태: 다운로드 요청 0건', (await ev(`document.getElementById('url').value`)).includes('WhWc3b3KhnY') && (await ev(`window.gsd.listJobs().then(a=>a.length)`)) === jobsBefore && ytdlpProcs() === 0);
+    await ev(`document.getElementById('url').value=''`);
   }
 
   // ===== UI10: MP3 전용 화면(1.1.0) =====
@@ -273,7 +326,7 @@ try {
     spawnSync('powershell.exe', ['-NoProfile', '-Command', `Set-Clipboard -Value '들어 보세요 ${V.caminandes3} 입니다'`]);
     await click('#modeMp3');
     await sleep(5000); const autoVal = await ev(`document.getElementById('mp3Url').value`);
-    check('UI10-1 [MP3] 화면으로 전환: MP3 카드 표시·동영상용 링크창/스마트 스위치/구독 탭 숨김', (await ev(`document.body.dataset.mode`)) === 'mp3' && (await ev(`document.getElementById('mp3Card').offsetParent!==null`)) && (await ev(`document.getElementById('urlForm').offsetParent===null && document.getElementById('tabSubs').offsetParent===null && document.querySelector('.smart').offsetParent===null`)), await ev(`document.body.dataset.mode`));
+    check('UI10-1 [MP3] 화면으로 전환: MP3 카드 표시·동영상용 링크창/구독 탭 숨김', (await ev(`document.body.dataset.mode`)) === 'mp3' && (await ev(`document.getElementById('mp3Card').offsetParent!==null`)) && (await ev(`document.getElementById('urlForm').offsetParent===null && document.getElementById('tabSubs').offsetParent===null `)), await ev(`document.body.dataset.mode`));
     check('UI10-2 ★클립보드에 링크가 있어도 MP3 입력칸은 비어 있고(자동 채움 없음) 다운로드 요청 0건', autoVal === '' && (await cards()).length === 0 && ytdlpProcs() === 0, { autoVal, procs: ytdlpProcs() });
     await click('#mp3Paste'); await until(() => ev(`document.getElementById('mp3Url').value`), 5000, 150);
     check('UI10-2b [붙여넣기] 버튼을 누르면 클립보드 글에서 링크만 입력칸에 들어감(그래도 받기를 누르기 전에는 0건)', (await ev(`document.getElementById('mp3Url').value`)) === V.caminandes3 && (await cards()).length === 0, await ev(`document.getElementById('mp3Url').value`));
@@ -315,9 +368,9 @@ try {
 
     // --- 영상+재생목록 주소: 선택창 → 취소 ---
     await setVal('#mp3Url', V.caminandes3 + '&list=PLav47HAVZMjnTFVZL-aImCQIC0uLZtNCz'); await click('#mp3Go');
-    const dlg = await waitSel('#dlgMp3Choice', 15000);
+    const dlg = await waitSel('#dlgChoice', 15000);
     await clickBtnText('취소'); await sleep(400);
-    check('UI10-14 영상+재생목록 주소: "이 영상만 / 재생목록 전체" 선택창이 뜨고, 취소하면 아무것도 추가되지 않음', dlg && !(await exists('#dlgMp3Choice')) && (await cards()).length === nBefore, (await cards()).length);
+    check('UI10-14 영상+재생목록 주소: "이 영상만 / 재생목록 전체" 선택창이 뜨고, 취소하면 아무것도 추가되지 않음', dlg && !(await exists('#dlgChoice')) && (await cards()).length === nBefore, (await cards()).length);
     await setVal('#mp3Url', '');
 
     // --- 재생목록 전체 MP3 일괄(192 kbps) ---
@@ -354,7 +407,7 @@ try {
     // --- 일시정지·이어받기·취소 (느리게 받도록 100KB/s 로 제한해 재기동한 앱) ---
     for (const f of filesIn(MP3DIR).filter(f => /Caminandes.*\.mp3$/.test(f) && path.dirname(f) === MP3DIR)) fs.rmSync(f, { force: true });
     await setVal('#mp3Url', V.caminandes3 + '&list=PLav47HAVZMjnTFVZL-aImCQIC0uLZtNCz'); await click('input[name=mp3q][value="320"]'); await click('#mp3Go');
-    await waitSel('#dlgMp3Choice', 15000); await click('#btnMp3ChoiceVideo');
+    await waitSel('#dlgChoice', 15000); await click('#btnChoiceVideo');
     const run = await waitCard(x => x.status === 'downloading' && /\d+%/.test(x.p1) && parseInt(x.p1) >= 10 && x.acts.includes('pause'), 120000);
     check('UI10-26 "이 영상만" → 영상 1개만 대기열에 들어가 진행률·속도 표시(MP3 화면의 목록)', !!run && (await cards()).length === 1 && /\/s/.test(run.p2), run && { p1: run.p1, p2: run.p2 });
     await actClick(run.id, 'pause');
@@ -386,13 +439,13 @@ try {
       const inner = spawnSync('powershell.exe', ['-NoProfile', '-Command', `[Console]::OutputEncoding=[Text.Encoding]::UTF8; (Get-CimInstance Win32_Process -Filter "Name='goodseedown.exe'" | ? { $_.ExecutablePath -and $_.ExecutablePath.ToLower().Contains('${marker.toLowerCase()}') } | select -First 1).ExecutablePath`], { encoding: 'utf8' }).stdout.trim();
       const a = vi(exe), b = inner ? vi(inner) : {};
       check('UI12-1 배포 exe(런처) VersionInfo 실측: LegalCopyright = "Copyright (c) 2026 굿씨드AI연구소 오경근 박사"·CompanyName = "goodseed AI LAB"', a.legal === 'Copyright (c) 2026 굿씨드AI연구소 오경근 박사' && a.company === 'goodseed AI LAB', a);
-      check('UI12-2 앱 본체(풀린 goodseedown.exe) VersionInfo 실측: 같은 LegalCopyright·CompanyName·ProductName goodseedown·버전 1.1.0', b.legal === 'Copyright (c) 2026 굿씨드AI연구소 오경근 박사' && b.company === 'goodseed AI LAB' && b.product === 'goodseedown' && /^1\.1\.0/.test(b.fileVer || ''), { inner, b });
+      check('UI12-2 앱 본체(풀린 goodseedown.exe) VersionInfo 실측: 같은 LegalCopyright·CompanyName·ProductName goodseedown·버전 1.2.0', b.legal === 'Copyright (c) 2026 굿씨드AI연구소 오경근 박사' && b.company === 'goodseed AI LAB' && b.product === 'goodseedown' && /^1\.2\.0/.test(b.fileVer || ''), { inner, b });
     }
     await restartApp({ GOODSEEDOWN_TEST_OPEN_LOG: OPENLOG });
     await click('#btnAbout');
     const dlg = await waitSel('#dlgAbout', 10000);
     const t = await text('#dlgAbout');
-    check('UI12-3 정보창: "굿씨드AI연구소(goodseed AI LAB) 오경근 박사"·Copyright 줄 표시', dlg && /굿씨드AI연구소\(goodseed AI LAB\) 오경근 박사/.test(t) && /Copyright \(c\) 2026 굿씨드AI연구소 오경근 박사/.test(t) && /1\.1\.0/.test(t), t.replace(/\n/g, ' ').slice(0, 200));
+    check('UI12-3 정보창: "굿씨드AI연구소(goodseed AI LAB) 오경근 박사"·Copyright 줄 표시', dlg && /굿씨드AI연구소\(goodseed AI LAB\) 오경근 박사/.test(t) && /Copyright \(c\) 2026 굿씨드AI연구소 오경근 박사/.test(t) && /1\.2\.0/.test(t), t.replace(/\n/g, ' ').slice(0, 200));
     check('UI12-4 "오경근 박사"는 링크(a)이고 주소는 https://ohkyoungkeun-namecard.vercel.app/', (await ev(`document.getElementById('aboutAuthor').tagName`)) === 'A' && (await ev(`document.getElementById('aboutAuthor').getAttribute('href')`)) === URLA && (await text('#aboutAuthor')) === '오경근 박사', await ev(`document.getElementById('aboutAuthor').getAttribute('href')`));
     const pageUrl0 = await ev(`location.href`); const nPages0 = (await (await fetch(`http://127.0.0.1:${PORT}/json`)).json()).filter(x => x.type === 'page').length;
     check('UI12-5 링크를 누르기 전에는 openExternal 호출 0건', !fs.existsSync(OPENLOG), null);

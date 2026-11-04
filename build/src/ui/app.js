@@ -3,7 +3,7 @@
 (() => {
   const gsd = window.gsd;
   const $ = s => document.querySelector(s);
-  const state = { settings: null, jobs: new Map(), subs: [], tab: 'downloads', mode: 'video', busyAnalyze: false };
+  const state = { settings: null, jobs: new Map(), subs: [], tab: 'downloads', mode: 'video' };
 
   // ---------- 작은 도구 ----------
   function h(tag, attrs, ...kids) {
@@ -50,7 +50,7 @@
     });
   });
 
-  // ---------- 옵션 폼(분석 창·설정 화면에서 공통으로 사용) ----------
+  // ---------- 옵션 폼(설정 화면의 다운로드 기본값) ----------
   const SUB_PRESETS = [['ko', '한국어'], ['en', '영어'], ['ja', '일본어'], ['zh-Hans', '중국어(간체)'], ['es', '스페인어'], ['fr', '프랑스어'], ['de', '독일어']];
   function seg(name, items, value, onchange) {
     const box = h('div', { class: 'seg', role: 'radiogroup' });
@@ -61,8 +61,8 @@
     }
     return box;
   }
-  // 옵션 객체(o)를 직접 고치는 폼. info: 영상 정보(있으면 자막 목록·최고 화질 안내에 사용)
-  function buildOptionsForm(o, { info, idp = 'opt', onChange = () => { } } = {}) {
+  // 옵션 객체(o)를 직접 고치는 폼
+  function buildOptionsForm(o, { idp = 'def', onChange = () => { } } = {}) {
     const wrap = h('div', { class: 'optform' });
     const changed = () => { render(); onChange(); };
     const kindBox = seg(idp + '-kind', [['video', '영상'], ['audio', '음성만'], ['subs', '자막만']], o.kind, v => { o.kind = v; if (v === 'subs') o.subs.enabled = true; changed(); });
@@ -79,7 +79,7 @@
     const chipsBox = h('div', { class: 'chips', id: idp + '-subs-chips' });
     const extra = h('input', { type: 'text', id: idp + '-subs-extra', placeholder: '예: ko,en,ja', style: 'width:200px', 'aria-label': '자막 언어 코드 직접 입력' });
     const presetLangs = new Set(SUB_PRESETS.map(p => p[0]));
-    extra.value = o.subs.langs.filter(l => !presetLangs.has(l) && !(info && info.subs.some(s => s.code === l))).join(',');
+    extra.value = o.subs.langs.filter(l => !presetLangs.has(l)).join(',');
     extra.addEventListener('input', () => { syncLangs(); onChange(); });
     const modeSeg = h('div');
     const subsArea = h('div', { id: idp + '-subs-area' });
@@ -93,18 +93,11 @@
       chipsBox.replaceChildren();
       const seen = new Set();
       const add = (code, label) => { if (seen.has(code)) return; seen.add(code); const i = h('input', { type: 'checkbox', value: code, checked: checked.has(code) || o.subs.langs.includes(code) }); i.addEventListener('change', () => { syncLangs(); onChange(); }); chipsBox.append(h('label', { title: code }, i, label)); };
-      if (info) {
-        for (const s of info.subs.slice(0, 60)) add(s.code, `${s.name} (${s.code})`);
-        if (o.subs.auto) for (const [c, l] of SUB_PRESETS) if (info.autoSubs.includes(c)) add(c, `${l} (자동)`);
-      }
       for (const [c, l] of SUB_PRESETS) add(c, l);
     }
-    const hint = h('div', { class: 'hint', id: idp + '-hint' });
     function render() {
       subsArea.hidden = false;
       wrap.querySelectorAll('[data-for]').forEach(n => { n.hidden = !n.dataset.for.split(' ').includes(o.kind); });
-      const noteAvail = info && info.heights && info.heights.length ? `이 영상은 최대 ${info.heights[0]}p 까지 있습니다. 선택한 화질보다 낮으면 가장 가까운 화질로 받습니다.` : '';
-      hint.textContent = noteAvail;
       modeSeg.replaceChildren(seg(idp + '-submode', o.kind === 'video' ? [['srt', 'SRT 파일로 저장'], ['embed', '영상에 합치기(소프트 자막)'], ['both', '둘 다']] : [['srt', 'SRT 파일로 저장']], o.kind === 'video' ? o.subs.mode : 'srt', v => { o.subs.mode = v; onChange(); }));
       subsArea.querySelector('.subs-body').hidden = !(o.subs.enabled || o.kind === 'subs');
       subsOn.disabled = o.kind === 'subs';
@@ -122,7 +115,7 @@
       h('div', { class: 'field', 'data-for': 'video' }, h('label', { class: 'lbl', for: idp + '-quality', text: '화질' }), quality, h('span', { class: 'lbl', text: '형식', style: 'min-width:auto;margin-left:10px' }), vfmt),
       h('div', { class: 'field', 'data-for': 'audio' }, h('span', { class: 'lbl', text: '음성 형식' }), afmt, bitrateWrap),
       h('div', { class: 'field', 'data-for': 'audio' }, h('span', { class: 'lbl', text: '태그' }), h('label', {}, id3On, ' 제목·아티스트 태그를 넣고, MP3 는 앨범 사진도 넣기')),
-      hint, subsArea);
+      subsArea);
     render();
     return wrap;
   }
@@ -134,150 +127,121 @@
   };
   const cloneOpts = o => JSON.parse(JSON.stringify(o));
 
-  // ---------- 분석 → 옵션 창 ----------
-  // 분석 중 창을 띄우고 결과를 돌려준다. 취소하거나 실패하면 null(실패는 알림을 띄움).
-  async function runAnalyze(url, mode = 'auto') {
-    if (state.busyAnalyze) return null;
-    state.busyAnalyze = true;
-    let cancelled = false;
-    const closeSpin = openModal(close => {
-      const d = h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': '분석 중', 'data-nocancel': '1', style: 'width:min(460px,100%)' },
-        h('div', { class: 'body', style: 'padding:22px' }, h('span', { class: 'spinner' }), h('span', { text: '링크를 분석하는 중… (재생목록·채널은 조금 걸릴 수 있어요)' })),
-        h('footer', {}, h('button', { type: 'button', id: 'btnAnalyzeCancel', text: '취소', onclick: () => { cancelled = true; gsd.cancelAnalyze(); close(); } })));
-      return d;
-    });
-    let r;
-    try { r = await gsd.analyze(url, { mode, end: 500 }); } finally { state.busyAnalyze = false; }
-    if (cancelled) return null;
-    closeSpin();
-    if (!r.ok) { if (r.code !== 'aborted') toast(r.error, 'err', 7000); return null; }
-    return r.result;
+  // ---------- 다운로드: 링크 → 곧바로 대기열 ----------
+  // ★자동 다운로드 없음(오너 지시): 아래는 사용자가 직접 붙여넣은 링크를 [다운로드]/[MP3 받기](또는 Enter)로 제출했을 때만 실행된다.
+  const LIST_CAP = 500; // 재생목록·채널에서 한 번에 읽는 최대 영상 수
+  let busyCancel = null;
+  function setBusy(text, onCancel) {
+    const on = !!text;
+    $('#busy').hidden = !on; $('#busyText').textContent = on ? text : '';
+    busyCancel = on && onCancel ? onCancel : null; $('#btnBusyCancel').hidden = !busyCancel;
+    for (const id of ['#btnGo', '#btnSubscribe', '#mp3Go']) $(id).disabled = on;
   }
-  async function analyzeUrl(url, mode = 'auto') {
-    const res = await runAnalyze(url, mode);
-    if (!res) return;
-    if (res.type === 'choice') return openChoice(res);
-    if (res.type === 'video') return openVideoOptions(res);
-    if (res.type === 'playlist') return openPlaylistOptions(res, url);
-  }
-
-  function openChoice(res) {
-    openModal(close => h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': '영상 또는 재생목록', style: 'width:min(520px,100%)' },
-      h('header', {}, h('div', { class: 't' }, h('b', { text: '영상과 재생목록 주소가 함께 있습니다' }))),
-      h('div', { class: 'body' }, h('p', { text: '이 링크는 영상 한 개와 그 영상이 들어 있는 재생목록 정보를 모두 담고 있어요. 어떻게 받을까요?' })),
-      h('footer', {}, h('button', { type: 'button', text: '취소', onclick: close }),
-        h('button', { type: 'button', id: 'btnChoiceVideo', text: '이 영상만', onclick: () => { close(); analyzeUrl(res.videoUrl, 'video'); } }),
-        h('button', { type: 'button', id: 'btnChoiceList', class: 'primary', text: '재생목록 전체', onclick: () => { close(); analyzeUrl(res.listUrl, 'list'); } }))));
-  }
-
-  const folderRow = state2 => {
-    const path = h('span', { class: 'path', id: 'opt-savedir', text: state2.saveDir, title: state2.saveDir });
-    return h('div', { class: 'field' }, h('span', { class: 'lbl', text: '저장 폴더' }), path,
-      h('button', { type: 'button', class: 'small', id: 'btnPickDir', text: '변경', onclick: async () => { const p = await gsd.pickFolder(); if (p) { state2.saveDir = p; path.textContent = p; path.title = p; } } }));
-  };
-  const saveDefaultRow = st => {
-    const c = h('input', { type: 'checkbox', id: 'opt-save-default', checked: st.saveAsDefault }); c.addEventListener('change', () => { st.saveAsDefault = c.checked; });
-    return h('div', { class: 'field' }, h('span', { class: 'lbl', text: '스마트 모드' }), h('label', {}, c, ' 이 설정을 기본값으로 저장 (스마트 모드에서 이 값으로 바로 받습니다)'));
-  };
   async function afterAdd(res, label) {
     const n = res.added.length, skipped = res.skipped.length;
     toast(n ? `${label}${n}개를 대기열에 추가했습니다.${skipped ? ` (이미 있거나 주소가 올바르지 않은 ${skipped}개는 건너뜀)` : ''}` : `추가할 항목이 없습니다.${skipped ? ' 이미 대기열에 있습니다.' : ''}`, n ? 'ok' : 'info');
     if (n) setTab('downloads');
   }
-  async function persistDefaults(opts) { await gsd.setSettings({ defaults: opts }); }
-
-  function openVideoOptions(info) {
-    const st = { saveDir: state.settings.saveDir, saveAsDefault: false };
-    const o = cloneOpts(state.settings.defaults);
-    const form = buildOptionsForm(o, { info, idp: 'opt' });
-    openModal(close => h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': '다운로드 옵션', id: 'dlgVideo' },
-      h('header', {}, info.thumbnail ? h('img', { src: info.thumbnail, alt: '' }) : null,
-        h('div', { class: 't' }, h('b', { text: info.title || info.url }), h('small', { text: [info.uploader, fmtDur(info.duration), info.license ? '라이선스: ' + info.license : ''].filter(Boolean).join(' · ') }))),
-      h('div', { class: 'body' }, form, folderRow(st), saveDefaultRow(st)),
-      h('footer', {}, h('button', { type: 'button', text: '취소', id: 'btnOptCancel', onclick: close }),
-        h('button', { type: 'button', class: 'primary', id: 'btnOptStart', 'data-autofocus': '1', text: '다운로드', onclick: async () => {
-          close(); if (st.saveAsDefault) await persistDefaults(o);
-          const res = await gsd.addDownloads({ items: [{ url: info.url, title: info.title, duration: info.duration }], options: o, saveDir: st.saveDir });
-          afterAdd(res, '영상 ');
-        } }))));
+  const extractFromText = async text => { const m = String(text).match(/https?:\/\/[^\s<>"'`]+/g); return m ? [...new Set(m)] : []; };
+  const videoOnlyUrl = u => { try { const x = new URL(u); for (const k of ['list', 'index', 'start_radio']) x.searchParams.delete(k); return x.href; } catch { return u; } };
+  const listOnlyUrl = u => 'https://www.youtube.com/playlist?list=' + encodeURIComponent(new URL(u).searchParams.get('list') || '');
+  const askVideoOrList = () => new Promise(res => openModal(close => {
+    const d = h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': '영상 또는 재생목록', id: 'dlgChoice', style: 'width:min(520px,100%)' },
+      h('header', {}, h('div', { class: 't' }, h('b', { text: '영상과 재생목록 주소가 함께 있습니다' }))),
+      h('div', { class: 'body' }, h('p', { text: '이 링크는 영상 한 개와 그 영상이 들어 있는 재생목록 정보를 모두 담고 있어요. 어떻게 받을까요?' })),
+      h('footer', {}, h('button', { type: 'button', text: '취소', onclick: () => { close(); res(null); } }),
+        h('button', { type: 'button', id: 'btnChoiceVideo', text: '이 영상만', onclick: () => { close(); res('video'); } }),
+        h('button', { type: 'button', id: 'btnChoiceList', class: 'primary', text: '재생목록 전체', onclick: () => { close(); res('list'); } })));
+    d.addEventListener('gs-cancel', () => res(null));
+    return d;
+  }));
+  // 재생목록·채널·다른 사이트 링크는 목록(영상 정보)만 읽는다. 취소하거나 실패하면 null(실패는 알림).
+  async function fetchInfo(url, mode) {
+    let cancelled = false;
+    setBusy('링크의 영상 목록을 읽는 중… (재생목록·채널은 조금 걸릴 수 있어요)', () => { cancelled = true; gsd.cancelAnalyze(); });
+    let r;
+    try { r = await gsd.analyze(url, { mode, end: LIST_CAP }); } finally { setBusy(null); }
+    if (cancelled) return null;
+    if (!r.ok) { if (r.code !== 'aborted') toast(r.error, 'err', 7000); return null; }
+    return r.result;
   }
-
-  function openPlaylistOptions(pl, srcUrl) {
-    const st = { saveDir: state.settings.saveDir, saveAsDefault: false, subfolder: state.settings.playlistSubfolder, prefix: state.settings.playlistNumberPrefix };
-    const o = cloneOpts(state.settings.defaults);
-    const form = buildOptionsForm(o, { info: null, idp: 'opt' });
-    const sel = new Set(pl.entries.filter(e => !e.unavailable).map(e => e.index));
-    const list = h('div', { class: 'plist', id: 'plist' });
-    const countLbl = h('span', { id: 'plCount' });
-    const upd = () => { countLbl.textContent = `${sel.size}개 선택 / 전체 ${pl.entries.length}개${pl.count > pl.entries.length ? ` (목록에는 처음 ${pl.entries.length}개만 불러왔어요 — 전체 ${pl.count}개)` : ''}`; };
-    for (const e of pl.entries) {
-      const cb = h('input', { type: 'checkbox', checked: sel.has(e.index), disabled: e.unavailable, 'data-index': e.index });
-      cb.addEventListener('change', () => { cb.checked ? sel.add(e.index) : sel.delete(e.index); upd(); });
-      list.append(h('label', { class: e.unavailable ? 'dis' : '' }, cb, h('span', { class: 'n', text: e.index }), h('span', { class: 't', text: e.title + (e.unavailable ? ' (받을 수 없음)' : ''), title: e.title }), h('span', { class: 'd', text: fmtDur(e.duration) })));
-    }
-    upd();
-    const setAll = v => { sel.clear(); list.querySelectorAll('input').forEach(i => { if (!i.disabled) { i.checked = v; if (v) sel.add(Number(i.dataset.index)); } }); upd(); };
-    const firstN = h('input', { type: 'number', min: '1', max: String(pl.entries.length), value: '5', id: 'plFirstN', style: 'width:70px', 'aria-label': '앞에서 몇 개' });
-    const subf = h('input', { type: 'checkbox', id: 'opt-subfolder', checked: st.subfolder }); subf.addEventListener('change', () => { st.subfolder = subf.checked; });
-    const pref = h('input', { type: 'checkbox', id: 'opt-prefix', checked: st.prefix }); pref.addEventListener('change', () => { st.prefix = pref.checked; });
-    openModal(close => h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': '재생목록 다운로드 옵션', id: 'dlgPlaylist' },
-      h('header', {}, h('div', { class: 't' }, h('b', { text: (pl.channel ? '채널: ' : '재생목록: ') + (pl.title || srcUrl) }), h('small', { text: [pl.uploader, `영상 ${pl.count}개`].filter(Boolean).join(' · ') }))),
-      h('div', { class: 'body' },
-        h('div', { class: 'field' }, h('span', { class: 'lbl', text: '받을 영상' }), h('button', { type: 'button', class: 'small', id: 'plAll', text: '전체 선택', onclick: () => setAll(true) }), h('button', { type: 'button', class: 'small', id: 'plNone', text: '전체 해제', onclick: () => setAll(false) }),
-          h('span', { class: 'hint', text: '앞에서' }), firstN, h('button', { type: 'button', class: 'small', id: 'plFirstBtn', text: '개만 선택', onclick: () => { const n = Math.max(1, Number(firstN.value) || 1); sel.clear(); list.querySelectorAll('input').forEach(i => { const k = Number(i.dataset.index); i.checked = !i.disabled && k <= n; if (i.checked) sel.add(k); }); upd(); } }), countLbl),
-        list,
-        h('div', { class: 'field' }, h('span', { class: 'lbl', text: '정리' }), h('label', {}, subf, ' 재생목록 이름으로 하위 폴더 만들기'), h('label', {}, pref, ' 파일 이름 앞에 번호 붙이기')),
-        form, folderRow(st), saveDefaultRow(st),
-        h('div', { class: 'field' }, h('span', { class: 'lbl', text: '구독' }), h('span', { class: 'hint', text: '구독하면 앞으로 올라오는 새 영상을 알려 드립니다. 자동으로 내려받지는 않아요 — 구독 탭에서 받을 영상만 직접 고릅니다.' }))),
-      h('footer', {}, h('button', { type: 'button', text: '취소', id: 'btnOptCancel', onclick: close }),
-        h('button', { type: 'button', id: 'btnSubscribe', text: '구독하기', onclick: async () => {
-          if (st.saveAsDefault) await persistDefaults(o);
-          const r = await gsd.subs.add({ url: pl.url || srcUrl, options: o, saveDir: st.saveDir });
-          if (!r.ok) return toast(r.error, 'err', 7000);
-          close(); toast(`'${r.sub.title}' 을(를) 구독했습니다. 새 영상이 올라오면 알려 드립니다(자동으로 받지는 않아요).`, 'ok'); setTab('subs');
-        } }),
-        h('button', { type: 'button', class: 'primary', id: 'btnOptStart', 'data-autofocus': '1', text: '선택한 영상 다운로드', onclick: async () => {
-          const items = pl.entries.filter(e => sel.has(e.index) && !e.unavailable).map(e => ({ url: e.url, title: e.title, duration: e.duration, index: e.index }));
-          if (!items.length) return toast('받을 영상을 하나 이상 선택해 주세요.', 'err');
-          close(); if (st.saveAsDefault) await persistDefaults(o);
-          const res = await gsd.addDownloads({ items, options: o, saveDir: st.saveDir, subfolder: st.subfolder ? pl.title : '', indexPrefix: st.prefix, source: { type: 'playlist', id: pl.id, title: pl.title } });
-          afterAdd(res, '영상 ');
-        } }))));
-  }
-
-  // ---------- 링크 입력(스마트 모드 포함) ----------
-  async function submitUrl(raw) {
-    const url = String(raw || '').trim();
-    if (!url) return toast('링크를 입력해 주세요.', 'err');
-    const urls = await extractFromText(url);
-    if (!urls.length) return toast('올바른 http(s) 링크가 아닙니다.', 'err');
-    const target = urls[0];
-    if (state.settings.smartMode) return smartGo(target);
-    return analyzeUrl(target);
-  }
-  const extractFromText = async text => { const m = String(text).match(/https?:\/\/[^\s<>"'`]+/g); return m ? m : []; };
-
-  async function smartGo(url) {
+  // 링크 하나를 prof(옵션·저장 폴더·재생목록 정리 방식)로 대기열에 넣는다. 넣지 않았으면 null.
+  async function queueLink(url, prof) {
+    const add = req => gsd.addDownloads({ options: prof.options, saveDir: prof.saveDir, ...req });
     const cls = await gsd.classify(url);
-    if (cls && cls.site === 'youtube' && (cls.kind === 'video' || cls.kind === 'choice')) {
-      const r = await gsd.smartAdd(url);
-      if (!r.ok) return toast(r.error, 'err', 7000);
-      return afterAdd(r.result, '영상 ');
+    const yt = cls && cls.site === 'youtube';
+    // YouTube 영상 한 개: 목록을 읽을 필요 없이 바로 대기열에(제목은 받기 시작하면 채워진다)
+    if (yt && cls.kind === 'video') return add({ items: [{ url }] });
+    let mode = 'auto';
+    if (yt && cls.kind === 'choice') {
+      mode = await askVideoOrList(); if (!mode) return null;
+      if (mode === 'video') return add({ items: [{ url: videoOnlyUrl(url) }] });
     }
-    // 재생목록·채널·다른 사이트: 목록을 읽어 보고 전부 넣는다(많으면 확인).
-    const a = await gsd.analyze(url, { mode: 'auto', end: 500 });
-    if (!a.ok) return toast(a.error, 'err', 7000);
-    const res = a.result;
+    const res = await fetchInfo(url, mode);
+    if (!res) return null;
     if (res.type === 'playlist') {
       const entries = res.entries.filter(e => !e.unavailable);
-      if (!entries.length) return toast('받을 수 있는 영상이 없습니다.', 'err');
-      if (entries.length > 50 && !(await confirmBox('영상이 많아요', `'${res.title}' 에서 영상 ${entries.length}개를 모두 받을까요?\n저장된 기본값(${optionSummary(state.settings.defaults)})으로 받습니다.`, `${entries.length}개 모두 받기`))) return;
-      const added = await gsd.addDownloads({ items: entries.map(e => ({ url: e.url, title: e.title, duration: e.duration, index: e.index })), options: state.settings.defaults, subfolder: state.settings.playlistSubfolder ? res.title : '', indexPrefix: state.settings.playlistNumberPrefix, source: { type: 'playlist', id: res.id, title: res.title } });
-      return afterAdd(added, '영상 ');
+      if (!entries.length) { toast('받을 수 있는 영상이 없습니다.', 'err'); return null; }
+      if (entries.length > 50 && !(await confirmBox('영상이 많아요', `'${res.title}' 에서 영상 ${entries.length}개를 모두 받을까요?\n${prof.what} 로 받습니다.`, `${entries.length}개 모두 받기`))) return null;
+      if (res.count > res.entries.length) toast(`목록이 길어 처음 ${res.entries.length}개만 넣습니다(전체 ${res.count}개).`, 'info', 7000);
+      return add({ items: entries.map(e => ({ url: e.url, title: e.title, duration: e.duration, index: e.index })), subfolder: prof.subfolder ? res.title : '', indexPrefix: prof.indexPrefix, source: { type: 'playlist', id: res.id, title: res.title } });
     }
-    if (res.type === 'choice') { const r = await gsd.smartAdd(res.videoUrl); return r.ok ? afterAdd(r.result, '영상 ') : toast(r.error, 'err'); }
-    const added = await gsd.addDownloads({ items: [{ url: res.url || url, title: res.title, duration: res.duration }], options: state.settings.defaults });
-    return afterAdd(added, '영상 ');
+    if (res.type === 'video') return add({ items: [{ url: res.url || url, title: res.title, duration: res.duration }] });
+    toast('링크를 해석하지 못했습니다. 영상 또는 재생목록 링크를 넣어 주세요.', 'err');
+    return null;
+  }
+  // 입력칸의 링크(여러 개면 모두, 최대 20개)를 차례로 넣는다. 하나라도 넣었으면 입력칸을 비운다.
+  async function submitLinks(input, prof) {
+    const raw = input.value;
+    const urls = await extractFromText(raw);
+    if (!urls.length) return toast(raw.trim() ? '올바른 http(s) 링크가 아닙니다.' : '링크를 입력해 주세요.', 'err');
+    let any = false;
+    for (const u of urls.slice(0, 20)) { const r = await queueLink(u, prof); if (r) { any = true; afterAdd(r, prof.label); } }
+    if (any) input.value = '';
+  }
+  // 동영상 화면: 입력창 옆 형식·화질(= 설정의 다운로드 기본값)으로 받는다.
+  function videoProfile() {
+    const s = state.settings, o = s.defaults;
+    return { options: o, saveDir: s.saveDir, subfolder: s.playlistSubfolder, indexPrefix: s.playlistNumberPrefix, label: o.kind === 'audio' ? (o.audioFormat === 'mp3' ? 'MP3 ' : '음성 ') : o.kind === 'subs' ? '자막 ' : '영상 ', what: optionSummary(o) };
+  }
+
+  // ---------- 형식·화질(입력창 옆) — 설정 화면의 다운로드 기본값과 같은 값을 쓴다 ----------
+  const INLINE_VQ = [['best', '최고'], ['1080', '1080p'], ['720', '720p'], ['480', '480p']];
+  const INLINE_AQ = [320, 256, 192, 128];
+  const inlineKind = d => (d.kind === 'video' ? 'video' : d.kind === 'audio' && d.audioFormat === 'mp3' ? 'mp3' : 'custom');
+  let inlineSaving = Promise.resolve();
+  function applyInline() {
+    const d = state.settings.defaults, k = inlineKind(d);
+    const kinds = [['video', '영상 ' + d.videoFormat.toUpperCase()], ['mp3', 'MP3 음악']];
+    if (k === 'custom') kinds.push(['custom', '설정값: ' + optionSummary(d)]); // 설정 화면에서 고른 자막만·M4A 등
+    $('#dlKind').replaceChildren(...kinds.map(([v, l]) => h('option', { value: v, text: l, selected: v === k })));
+    let q = [];
+    if (k === 'video') { q = INLINE_VQ.slice(); if (!q.some(x => x[0] === d.quality)) q.push([d.quality, QUALITY_LABEL[d.quality] || d.quality + 'p']); }
+    else if (k === 'mp3') q = INLINE_AQ.map(v => [String(v), v + 'kbps']);
+    const cur = k === 'mp3' ? String(d.mp3Bitrate) : d.quality;
+    $('#dlQuality').replaceChildren(...q.map(([v, l]) => h('option', { value: v, text: l, selected: v === cur })));
+    $('#dlQualityLbl').textContent = k === 'mp3' ? '음질' : '화질';
+    $('#dlQualityWrap').hidden = k === 'custom';
+  }
+  const saveInline = patch => { inlineSaving = gsd.setSettings({ defaults: patch }).then(s => { state.settings = s; applyInline(); }).catch(err => toast('설정 저장 오류: ' + err.message, 'err')); return inlineSaving; };
+
+  // ---------- 구독하기: 붙여넣은 재생목록·채널 링크를 바로 구독(지금 있는 영상은 '본 영상'으로 기록만 하고 받지 않음) ----------
+  async function subscribeLink() {
+    const raw = $('#url').value;
+    const urls = await extractFromText(raw);
+    if (!urls.length) return toast(raw.trim() ? '올바른 http(s) 링크가 아닙니다.' : '구독할 재생목록·채널 링크를 입력해 주세요.', 'err');
+    let url = urls[0];
+    const cls = await gsd.classify(url);
+    if (cls && cls.site === 'youtube' && cls.kind === 'video') return toast('영상 한 개의 링크는 구독할 수 없습니다. 재생목록이나 채널 링크를 넣어 주세요.', 'err', 6000);
+    if (cls && cls.site === 'youtube' && cls.kind === 'choice') url = listOnlyUrl(url);
+    await inlineSaving;
+    setBusy('구독할 목록을 확인하는 중… (지금 있는 영상은 받지 않고 기록만 합니다)');
+    let r;
+    try { r = await gsd.subs.add({ url, options: state.settings.defaults, saveDir: state.settings.saveDir }); } finally { setBusy(null); }
+    if (!r.ok) return toast(r.error, 'err', 7000);
+    $('#url').value = '';
+    toast(`'${r.sub.title}' 을(를) 구독했습니다. 새 영상이 올라오면 알려 드립니다(자동으로 받지는 않아요).`, 'ok');
+    setTab('subs');
   }
 
   // ---------- 다운로드 목록 ----------
@@ -381,9 +345,9 @@
       h('div', { class: 'card' }, h('h3', { text: '저장과 동시 다운로드' }),
         h('div', { class: 'field' }, h('span', { class: 'lbl', text: '저장 폴더' }), dirPath, h('button', { type: 'button', class: 'small', id: 'btnSetDir', text: '변경', onclick: async () => { const p = await gsd.pickFolder(); if (p) { await gsd.setSettings({ saveDir: p }); } } })),
         h('div', { class: 'field' }, h('label', { class: 'lbl', for: 'set-conc', text: '동시 다운로드 수' }), num('set-conc', s.maxConcurrent, 1, 6, v => gsd.setSettings({ maxConcurrent: v })), h('span', { class: 'hint', text: '1~6개. 늘리면 빠르지만 사이트가 일시적으로 막을 수 있어요.' })),
-        h('div', { class: 'field' }, h('span', { class: 'lbl', text: '자동 다운로드' }), h('span', { class: 'hint', text: '없음 — 직접 링크를 붙여넣고 받기 버튼을 누른 것만 내려받습니다. 클립보드는 [붙여넣기]를 눌렀을 때만 읽고, 구독은 새 영상을 알리기만 합니다.' }))),
-      h('div', { class: 'card' }, h('h3', { text: '스마트 모드 기본값' }),
-        h('p', { class: 'hint', text: '스마트 모드를 켜면 링크를 붙여넣기만 해도 아래 설정으로 바로 받습니다. (상단의 스마트 모드 스위치로 켜고 끕니다)' }),
+        h('div', { class: 'field' }, h('span', { class: 'lbl', text: '자동 다운로드' }), h('span', { class: 'hint', text: '없음 — 직접 링크를 붙여넣고 [다운로드]/[MP3 받기]를 누른 것만 내려받습니다. 클립보드는 [붙여넣기]를 눌렀을 때만 읽고, 구독은 새 영상을 알리기만 합니다.' }))),
+      h('div', { class: 'card' }, h('h3', { text: '다운로드 기본값' }),
+        h('p', { class: 'hint', text: '[다운로드]를 누르면 이 설정으로 바로 받습니다. 종류·화질은 위 입력창 옆의 형식·화질과 같은 값이고, 자막·MKV·M4A 같은 세부 옵션은 여기서 정합니다. 구독한 목록의 새 영상을 받을 때는 구독할 때의 설정을 씁니다.' }),
         buildOptionsForm(defOpts, { idp: 'def', onChange: saveDef }),
         h('div', { class: 'field' }, h('label', { class: 'lbl', for: 'set-subfolder', text: '재생목록 정리' }), check('set-subfolder', s.playlistSubfolder, v => gsd.setSettings({ playlistSubfolder: v })), h('span', { text: '하위 폴더 만들기', class: 'hint' }), check('set-prefix', s.playlistNumberPrefix, v => gsd.setSettings({ playlistNumberPrefix: v })), h('span', { text: '번호 붙이기', class: 'hint' }))),
       h('div', { class: 'card' }, h('h3', { text: '구독' }), h('div', { class: 'field' }, h('label', { class: 'lbl', for: 'set-interval', text: '새 영상 확인 주기' }), interval, h('span', { class: 'hint', text: '앱이 켜져 있는 동안 이 간격으로 확인합니다.' }))),
@@ -422,63 +386,21 @@
     const m = state.settings.mp3;
     return { kind: 'audio', audioFormat: 'mp3', mp3Bitrate: m.bitrate, id3: m.id3, subs: { enabled: false, langs: [], auto: false, mode: 'srt' } };
   }
-  const mp3Clear = () => { $('#mp3Url').value = ''; };
-  async function mp3AddOne(url, title, duration) {
-    const res = await gsd.addDownloads({ items: [{ url, title, duration }], options: mp3Options(), saveDir: state.settings.mp3.saveDir });
-    await afterAdd(res, 'MP3 ');
-    mp3Clear();
-  }
-  const askVideoOrList = () => new Promise(res => openModal(close => {
-    const d = h('div', { class: 'dlg', role: 'dialog', 'aria-modal': 'true', 'aria-label': '영상 또는 재생목록', id: 'dlgMp3Choice', style: 'width:min(520px,100%)' },
-      h('header', {}, h('div', { class: 't' }, h('b', { text: '영상과 재생목록 주소가 함께 있습니다' }))),
-      h('div', { class: 'body' }, h('p', { text: '이 링크는 영상 한 개와 그 영상이 들어 있는 재생목록 정보를 모두 담고 있어요. 어떻게 받을까요?' })),
-      h('footer', {}, h('button', { type: 'button', text: '취소', onclick: () => { close(); res(null); } }),
-        h('button', { type: 'button', id: 'btnMp3ChoiceVideo', text: '이 영상만', onclick: () => { close(); res('video'); } }),
-        h('button', { type: 'button', id: 'btnMp3ChoiceList', class: 'primary', text: '재생목록 전체', onclick: () => { close(); res('list'); } })));
-    d.addEventListener('gs-cancel', () => res(null));
-    return d;
-  }));
-  async function mp3Submit() {
-    const urls = await extractFromText($('#mp3Url').value);
-    if (!urls.length) return toast($('#mp3Url').value.trim() ? '올바른 http(s) 링크가 아닙니다.' : '링크를 입력해 주세요.', 'err');
-    const url = urls[0];
-    const cls = await gsd.classify(url);
-    const yt = cls && cls.site === 'youtube';
-    let mode = 'auto';
-    if (yt && cls.kind === 'choice') { mode = await askVideoOrList(); if (!mode) return; }
-    // 영상 한 개: 분석 없이 바로 대기열에(영상+재생목록 주소에서 '이 영상만'을 고른 경우는 영상 정보만 조회)
-    if (yt && cls.kind === 'video') return mp3AddOne(url);
-    if (yt && cls.kind === 'choice' && mode === 'video') { const v = await runAnalyze(url, 'video'); if (!v || v.type !== 'video') return; return mp3AddOne(v.url || url, v.title, v.duration); }
-    const res = await runAnalyze(url, mode === 'list' ? 'list' : 'auto');
-    if (!res) return;
-    if (res.type === 'playlist') {
-      const entries = res.entries.filter(e => !e.unavailable);
-      if (!entries.length) return toast('받을 수 있는 영상이 없습니다.', 'err');
-      if (entries.length > 50 && !(await confirmBox('영상이 많아요', `'${res.title}' 에서 영상 ${entries.length}개를 모두 MP3 로 받을까요?\n${state.settings.mp3.bitrate} kbps 로 변환해 저장합니다.`, `${entries.length}개 모두 받기`))) return;
-      const added = await gsd.addDownloads({ items: entries.map(e => ({ url: e.url, title: e.title, duration: e.duration, index: e.index })), options: mp3Options(), saveDir: state.settings.mp3.saveDir, subfolder: res.title, indexPrefix: true, source: { type: 'playlist', id: res.id, title: res.title } });
-      await afterAdd(added, 'MP3 '); mp3Clear(); return;
-    }
-    if (res.type === 'video') return mp3AddOne(res.url || url, res.title, res.duration);
-    toast('링크를 해석하지 못했습니다. 영상 또는 재생목록 링크를 넣어 주세요.', 'err');
-  }
-
-  function applySmart() {
-    const on = !!state.settings.smartMode;
-    $('#smartToggle').checked = on; $('#btnGo').textContent = on ? '바로 받기' : '분석';
-    $('#smartLabel').textContent = on ? '스마트 모드 켜짐' : '스마트 모드';
-    $('#url').placeholder = on ? '링크를 붙여넣고 Enter — 저장된 기본값으로 바로 받습니다' : '영상·재생목록·채널 링크를 여기에 붙여넣으세요';
-  }
+  const mp3Profile = () => { const m = state.settings.mp3; return { options: mp3Options(), saveDir: m.saveDir, subfolder: true, indexPrefix: true, label: 'MP3 ', what: `MP3 ${m.bitrate} kbps` }; };
   async function init() {
     state.settings = await gsd.getSettings();
     for (const j of await gsd.listJobs()) state.jobs.set(j.id, j);
     state.subs = await gsd.subs.list();
-    applySmart(); renderJobs(); renderSubs(); applyMp3Controls(); applyMode(state.settings.lastMode);
-    $('#urlForm').addEventListener('submit', e => { e.preventDefault(); const v = $('#url').value; submitUrl(v).then(() => { $('#url').value = ''; }).catch(err => toast('오류: ' + err.message, 'err')); });
+    applyInline(); renderJobs(); renderSubs(); applyMp3Controls(); applyMode(state.settings.lastMode);
+    $('#urlForm').addEventListener('submit', e => { e.preventDefault(); if (!$('#busy').hidden) return; inlineSaving.then(() => submitLinks($('#url'), videoProfile())).catch(err => toast('오류: ' + err.message, 'err')); });
+    $('#btnSubscribe').addEventListener('click', () => { if ($('#busy').hidden) subscribeLink().catch(err => toast('오류: ' + err.message, 'err')); });
+    $('#btnBusyCancel').addEventListener('click', () => { if (busyCancel) busyCancel(); });
+    $('#dlKind').addEventListener('change', e => { const v = e.target.value; if (v === 'video') saveInline({ kind: 'video' }); else if (v === 'mp3') saveInline({ kind: 'audio', audioFormat: 'mp3' }); });
+    $('#dlQuality').addEventListener('change', e => { const k = inlineKind(state.settings.defaults); if (k === 'video') saveInline({ quality: e.target.value }); else if (k === 'mp3') saveInline({ mp3Bitrate: Number(e.target.value) }); });
     $('#btnPaste').addEventListener('click', async () => { const u = await gsd.readClipboard(); if (u.length) $('#url').value = u[0]; else toast('클립보드에 링크가 없습니다.', 'info'); $('#url').focus(); });
-    $('#smartToggle').addEventListener('change', async e => { state.settings = await gsd.setSettings({ smartMode: e.target.checked }); applySmart(); toast(state.settings.smartMode ? `스마트 모드 켜짐 — 저장된 기본값(${optionSummary(state.settings.defaults)})으로 바로 받습니다.` : '스마트 모드를 껐습니다. 링크를 분석한 뒤 옵션을 고릅니다.', 'info'); });
     document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
     document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => { if (b.dataset.mode !== state.mode) applyMode(b.dataset.mode, { persist: true }); if (state.tab !== 'downloads') setTab('downloads'); (state.mode === 'mp3' ? $('#mp3Url') : $('#url')).focus(); }));
-    $('#mp3Form').addEventListener('submit', e => { e.preventDefault(); mp3Submit().catch(err => toast('오류: ' + err.message, 'err')); });
+    $('#mp3Form').addEventListener('submit', e => { e.preventDefault(); (!$('#busy').hidden ? Promise.resolve() : submitLinks($('#mp3Url'), mp3Profile())).catch(err => toast('오류: ' + err.message, 'err')); });
     $('#mp3Paste').addEventListener('click', async () => { const u = await gsd.readClipboard(); if (u.length) { $('#mp3Url').value = u[0]; } else toast('클립보드에 링크가 없습니다.', 'info'); $('#mp3Url').focus(); });
     for (const r of document.querySelectorAll('input[name=mp3q]')) r.addEventListener('change', () => { if (r.checked) gsd.setSettings({ mp3: { bitrate: Number(r.value) } }); });
     $('#mp3Id3').addEventListener('change', e => gsd.setSettings({ mp3: { id3: e.target.checked } }));
@@ -493,7 +415,23 @@
     gsd.onJobs(arr => renderJobs(arr));
     gsd.onJobsRemoved(id => { state.jobs.delete(id); renderJobs([]); });
     gsd.onSubs(arr => { state.subs = arr; renderSubs(); });
-    gsd.onSettings(s => { state.settings = s; applySmart(); applyMp3Controls(); if (state.tab === 'settings') { const a = document.activeElement; if (!a || !$('#settingsForm').contains(a) || a.id === 'set-savedir') renderSettings(); else { const d = $('#set-savedir'); if (d) { d.textContent = s.saveDir; d.title = s.saveDir; } } } });
+    gsd.onSettings(s => { state.settings = s; applyInline(); applyMp3Controls(); if (state.tab === 'settings') { const a = document.activeElement; if (!a || !$('#settingsForm').contains(a) || a.id === 'set-savedir') renderSettings(); else { const d = $('#set-savedir'); if (d) { d.textContent = s.saveDir; d.title = s.saveDir; } } } });
+    // ---------- 새 버전 배너 — 시작 시 자동 확인 결과를 화면 맨 위에 알린다(자동 설치 없음: [업그레이드]를 눌러야 시작) ----------
+    let updDismissed = false; // [나중에]: 이번 실행 동안만 숨김(다음 실행에는 다시 보임)
+    const showUpd = info => {
+      if (!info || !info.version || updDismissed) return;
+      $('#updText').replaceChildren(`새 버전(${info.version})이 나왔습니다. 업그레이드하세요.`, h('small', { text: `현재 ${info.current} → ${info.version}${info.sizeLine ? ' · ' + info.sizeLine : ''}` }));
+      $('#updBanner').hidden = false;
+    };
+    $('#btnUpdLater').addEventListener('click', () => { updDismissed = true; $('#updBanner').hidden = true; });
+    $('#btnUpgrade').addEventListener('click', async () => {
+      const b = $('#btnUpgrade'); b.disabled = true;
+      try { const r = await gsd.appUpdateStart(); if (r && r.busy) toast('이미 업데이트를 확인하거나 진행하는 중입니다.', 'info'); }
+      catch (err) { toast('업데이트를 시작하지 못했습니다: ' + err.message, 'err'); }
+      finally { b.disabled = false; }
+    });
+    gsd.onAppUpdate(showUpd);
+    gsd.appUpdateInfo().then(showUpd).catch(() => { }); // 화면이 늦게 뜬 경우를 위해 이미 확인된 결과도 한 번 읽는다
     gsd.onToast(t => toast(t.text, t.kind));
     gsd.onEngineProgress(p => { if (p.phase === 'start') toast(`yt-dlp 엔진 ${p.version} 을(를) 내려받는 중…`, 'info', 3000); if (p.phase === 'done') refreshEngineLabel(); });
     function refreshEngineLabel() { if (state.tab === 'settings') renderSettings(); }

@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="updBanner" class="upd-banner" hidden role="status" aria-live="polite"><span class="upd-ico" aria-hidden="true">⬆</span><span id="updText" class="upd-text"></span><button type="button" id="btnUpgrade" class="primary upd-go">업그레이드</button><button type="button" id="btnUpdLater" class="ghost upd-later">나중에</button></div>
 <header class="top">
   <div class="brand"><img src="icon.png" alt="" width="34" height="34"><div><strong>goodseedown</strong><small>goodseed AI LAB</small></div></div>
   <div class="modes" role="tablist" aria-label="화면 선택">
@@ -15,14 +16,15 @@
     <button type="button" role="tab" id="modeMp3" data-mode="mp3" class="mode" aria-selected="false">MP3</button>
   </div>
   <form class="urlbar videoonly" id="urlForm" autocomplete="off">
-    <input id="url" type="text" spellcheck="false" placeholder="영상·재생목록·채널 링크를 여기에 붙여넣으세요" aria-label="다운로드할 링크">
+    <input id="url" type="text" spellcheck="false" placeholder="영상·재생목록·채널 링크를 붙여넣고 [다운로드] (여러 개는 줄바꿈·띄어쓰기로)" aria-label="다운로드할 링크">
     <button type="button" id="btnPaste" class="ghost" title="클립보드의 링크 붙여넣기">붙여넣기</button>
-    <button type="submit" id="btnGo" class="primary">분석</button>
+    <label class="mini" title="형식"><span>형식</span><select id="dlKind" aria-label="형식"></select></label>
+    <label class="mini" id="dlQualityWrap" title="화질"><span id="dlQualityLbl">화질</span><select id="dlQuality" aria-label="화질"></select></label>
+    <button type="submit" id="btnGo" class="primary go">다운로드</button>
+    <button type="button" id="btnSubscribe" class="ghost small" title="붙여넣은 재생목록·채널을 구독합니다(새 영상 알림만 — 자동으로 받지 않음)">구독하기</button>
   </form>
-  <label class="smart videoonly" title="저장된 기본값으로 링크를 붙여넣기만 하면 바로 받습니다">
-    <input type="checkbox" id="smartToggle"><span class="switch" aria-hidden="true"></span><span id="smartLabel">스마트 모드</span>
-  </label>
 </header>
+<div id="busy" class="banner busy" hidden role="status"><span class="spinner sm" aria-hidden="true"></span><span id="busyText"></span><button type="button" id="btnBusyCancel" class="small">취소</button></div>
 
 <nav class="tabs" role="tablist">
   <button role="tab" data-tab="downloads" class="tab active" id="tabDownloads">다운로드 <span class="badge" id="badgeActive" hidden>0</span></button>
@@ -36,7 +38,7 @@
       <h3>MP3 만 받기</h3>
       <form id="mp3Form" autocomplete="off">
         <div class="field">
-          <input id="mp3Url" type="text" spellcheck="false" class="grow" placeholder="영상·재생목록·채널 링크를 붙여넣으세요 (복사한 링크는 자동으로 들어옵니다)" aria-label="MP3 로 받을 링크">
+          <input id="mp3Url" type="text" spellcheck="false" class="grow" placeholder="영상·재생목록·채널 링크를 붙여넣으세요 ([붙여넣기] 버튼 또는 Ctrl+V)" aria-label="MP3 로 받을 링크">
           <button type="button" id="mp3Paste" class="ghost" title="클립보드의 링크 붙여넣기">붙여넣기</button>
         </div>
         <div class="field"><span class="lbl">음질</span>
@@ -64,12 +66,12 @@
     <div id="emptyJobs" class="empty">
       <img src="icon.png" alt="" width="72" height="72">
       <h2>링크를 붙여넣어 시작하세요</h2>
-      <p>위의 입력창에 영상·재생목록·채널 링크를 붙여넣고 <b>분석</b>을 누르면 화질·형식·자막을 고를 수 있어요.<br>자주 쓰는 설정은 <b>스마트 모드</b>로 저장해 두고, 다음부터는 링크만 붙여넣으면 바로 받아집니다.</p>
+      <p>위의 입력창에 영상·재생목록·채널 링크를 붙여넣고 <b>형식</b>(영상 MP4 / MP3 음악)과 <b>화질</b>을 고른 뒤 <b>다운로드</b>를 누르면 바로 받습니다.<br>재생목록·채널 링크는 전체를 재생목록 이름의 하위 폴더에 받습니다. 자막 등 세부 옵션은 <b>설정</b>에서 정할 수 있어요.</p>
     </div>
   </section>
 
   <section id="paneSubs" class="pane" hidden>
-    <div class="subhead"><h2>구독</h2><p>재생목록이나 채널을 구독해 두면 새로 올라온 영상을 주기적으로 확인해 <b>알려 드립니다</b>. 자동으로 내려받지는 않으며, 받고 싶은 영상만 <b>받기</b>를 눌러 내려받습니다. 구독은 입력창에 재생목록·채널 링크를 붙여넣고 <b>분석</b> 후 <b>구독하기</b>를 눌러 추가하세요. 처음 구독할 때 이미 올라와 있던 영상은 새 영상으로 치지 않습니다.</p></div>
+    <div class="subhead"><h2>구독</h2><p>재생목록이나 채널을 구독해 두면 새로 올라온 영상을 주기적으로 확인해 <b>알려 드립니다</b>. 자동으로 내려받지는 않으며, 받고 싶은 영상만 <b>받기</b>를 눌러 내려받습니다. 구독은 위 입력창에 재생목록·채널 링크를 붙여넣고 <b>구독하기</b>를 눌러 추가하세요(새 영상을 받을 때는 구독할 때의 형식·화질로 받습니다). 처음 구독할 때 이미 올라와 있던 영상은 새 영상으로 치지 않습니다.</p></div>
     <div id="subList" class="subs"></div>
     <div id="emptySubs" class="empty small-empty">구독 중인 재생목록·채널이 없습니다.</div>
   </section>

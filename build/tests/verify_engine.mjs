@@ -374,27 +374,34 @@ if (want('E17')) {
   await eng.shutdown();
 }
 
-// ===================== E18. 스마트 모드 =====================
+// ===================== E18. 분석 없이 바로 대기열(1.2.0) — 스마트 모드 폐지·옛 설정 안전 로드 =====================
 if (want('E18')) {
-  const { eng, out } = newEngine('e18', { settings: { smartMode: true, defaults: { kind: 'audio', audioFormat: 'm4a', quality: '720' } } });
+  // 1.1.x 가 저장한 설정 파일(smartMode:true 포함)을 미리 만들어 두고 엔진을 띄운다.
+  const legacyDir = path.join(WORK, 'e18'); fs.rmSync(legacyDir, { recursive: true, force: true }); fs.mkdirSync(path.join(legacyDir, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(legacyDir, 'data', 'settings.json'), JSON.stringify({ schema: 1, saveDir: path.join(legacyDir, 'out'), smartMode: true, maxConcurrent: 2, defaults: { kind: 'audio', audioFormat: 'm4a', quality: '720' } }));
+  const { eng, out } = newEngine('e18');
+  const s0 = eng.getSettings();
+  check('E18 옛 설정(smartMode:true 포함)을 안전하게 읽음: 나머지 설정 유지, smartMode 필드는 없어짐', s0.smartMode === undefined && s0.maxConcurrent === 2 && s0.defaults.kind === 'audio' && s0.defaults.audioFormat === 'm4a', { smart: s0.smartMode, conc: s0.maxConcurrent, d: s0.defaults });
+  eng.setSettings({ maxConcurrent: 3, smartMode: true });
+  const saved = JSON.parse(fs.readFileSync(path.join(legacyDir, 'data', 'settings.json'), 'utf8'));
+  check('E18 smartMode 를 다시 넣으려 해도 무시되고 저장 파일에도 남지 않음·smartAdd 는 없음', saved.smartMode === undefined && eng.getSettings().smartMode === undefined && typeof eng.smartAdd === 'undefined' && saved.maxConcurrent === 3, saved);
+  // 분석 없이 영상 링크를 곧바로 대기열에(앱의 [다운로드] 가 하는 일): 저장된 기본값(M4A)이 적용된다
   const t0 = Date.now();
-  const r = await eng.smartAdd(V.caminandes3);
+  const r = eng.addDownloads({ items: [{ url: V.caminandes3 }] });
   const dt = Date.now() - t0;
-  check('E18 스마트 모드: 영상 링크 한 번에 저장된 기본값(M4A 음성)으로 대기열 추가 — 옵션 선택 없이', r.kind === 'video' && r.added.length === 1 && r.added[0].options.kind === 'audio' && r.added[0].options.audioFormat === 'm4a', { r: r.kind, opts: r.added[0] && r.added[0].options, ms: dt });
-  check('E18 영상 링크는 분석 없이 즉시(1초 미만) 추가', dt < 1000, dt);
+  check('E18 영상 링크를 분석 없이 즉시(1초 미만) 대기열에 추가 — 저장된 기본값(M4A 음성) 적용', r.added.length === 1 && r.added[0].options.kind === 'audio' && r.added[0].options.audioFormat === 'm4a' && dt < 1000, { opts: r.added[0] && r.added[0].options, ms: dt });
   const j = await waitJob(eng, r.added[0].id); const p = j && j.files[0] && probe(j.files[0]);
   check('E18 기본값대로 결과 생성(ffprobe: aac·영상 없음)', p && j.status === 'completed' && /\.m4a$/i.test(j.files[0]) && p.acodec === 'aac' && !p.vcodec, { p, e: j && j.error });
+  // 재생목록: 목록을 읽어 전체를 하위 폴더로(앱이 하는 일과 같은 호출)
   eng.setSettings({ defaults: { kind: 'audio', audioFormat: 'mp3' }, playlistNumberPrefix: true });
   eng.downloads.testExtraArgs = ['--download-sections', '*0-10'];
-  const pl = await eng.smartAdd(V.playlist, { cap: 2 });
-  check('E18 스마트 모드: 재생목록 링크 → 목록을 읽어 상한(2개)만큼 한 번에 추가·하위 폴더·번호', pl.kind === 'playlist' && pl.count === 2 && pl.added.every(x => x.outDir.endsWith('Blender Open Movies') && x.options.audioFormat === 'mp3' && x.source.type === 'playlist'), { kind: pl.kind, count: pl.count, dirs: pl.added.map(x => x.outDir) });
+  const info = await eng.analyze(V.playlist, { mode: 'auto', end: 2 });
+  const pl = eng.addDownloads({ items: info.entries.filter(e => !e.unavailable).map(e => ({ url: e.url, title: e.title, duration: e.duration, index: e.index })), subfolder: info.title, indexPrefix: true, source: { type: 'playlist', id: info.id, title: info.title } });
+  check('E18 재생목록 링크 → 목록 항목 전체가 재생목록 이름의 하위 폴더로·MP3 기본값·출처 playlist', pl.added.length === 2 && pl.added.every(x => x.outDir.endsWith('Blender Open Movies') && x.options.audioFormat === 'mp3' && x.source.type === 'playlist'), { count: pl.added.length, dirs: pl.added.map(x => x.outDir) });
   const done = await Promise.all(pl.added.map(x => waitJob(eng, x.id, undefined, 300000)));
   check('E18 재생목록 항목 완료·번호 접두', done.every(x => x && x.status === 'completed') && fs.readdirSync(path.join(out, 'Blender Open Movies')).some(f => f.startsWith('001 - ')) && fs.readdirSync(path.join(out, 'Blender Open Movies')).some(f => f.startsWith('002 - ')), fs.readdirSync(path.join(out, 'Blender Open Movies')));
-  const ch = await eng.smartAdd(V.caminandes3 + '&list=PLav47HAVZMjnTFVZL-aImCQIC0uLZtNCz');
-  check('E18 영상+재생목록 주소는 그 영상 한 개만(재생목록 폭주 방지)', ch.kind === 'video' && ch.count === 1 && !ch.added[0].url.includes('list='), ch.added[0] && ch.added[0].url);
-  await eng.downloads.cancel(ch.added[0].id);
-  const bad = await eng.smartAdd('--exec calc').then(() => 'accepted', e => e.code);
-  check('E18 잘못된 입력은 거부', bad === 'bad-url', bad);
+  const bad = eng.addDownloads({ items: [{ url: '--exec calc' }, { url: 'file:///c:/windows/win.ini' }] });
+  check('E18 잘못된 입력(옵션 흉내·file://)은 대기열에 들어가지 않고 건너뜀', bad.added.length === 0 && bad.skipped.length === 2, bad.skipped.map(x => x.reason));
   await eng.shutdown();
 }
 

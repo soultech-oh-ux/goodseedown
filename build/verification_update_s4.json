@@ -1,0 +1,72 @@
+{
+ "when": "2026-11-04T03:20:47.453Z",
+ "old": {
+  "ver": "1.2.0",
+  "sha256": "bad796b6e59a388c35cae753f04aa88977e85aeda8f4e68440ecfbf1d7798c77",
+  "size": 213139968
+ },
+ "new": {
+  "ver": "1.2.1",
+  "sha256": "18be79275aee5b89bb09e0f12d5afe109f904ef2cd28a3f14148304c3096ed89",
+  "size": 213139968
+ },
+ "total": 6,
+ "passed": 6,
+ "failed": 0,
+ "results": [
+  {
+   "name": "S4-1 배너 [나중에] → 배너 숨김·교체 없음·앱 계속 사용 가능·다운로드 요청 0건",
+   "ok": true,
+   "detail": [
+    "/repos/x/releases/latest",
+    "/repos/x/releases/latest",
+    "/repos/x/releases/latest",
+    "/repos/x/releases/latest"
+   ]
+  },
+  {
+   "name": "S4-2 수동 확인 → 확인창(새·현재 버전·릴리스 노트·[지금 업데이트][나중에])",
+   "ok": true,
+   "detail": [
+    "지금 업데이트",
+    "나중에"
+   ]
+  },
+  {
+   "name": "S4-3 수동 확인에서 [나중에] → 교체 없음",
+   "ok": true,
+   "detail": [
+    "/repos/x/releases/latest",
+    "/repos/x/releases/latest",
+    "/repos/x/releases/latest",
+    "/repos/x/releases/latest"
+   ]
+  },
+  {
+   "name": "S4-4 [나중에] 뒤 다음 실행에는 배너가 다시 보임",
+   "ok": true,
+   "detail": {
+    "text": "새 버전(1.2.1)이 나왔습니다. 업그레이드하세요.\n현재 1.2.0 → 1.2.1 · 받을 용량: 약 203.3 MB (전체 파일)",
+    "btn": "업그레이드",
+    "later": "나중에"
+   }
+  },
+  {
+   "name": "S4-5 옛 update-state.json(skippedVersion)이 있어도 정상 기동·배너 표시",
+   "ok": true,
+   "detail": {
+    "text": "새 버전(1.2.1)이 나왔습니다. 업그레이드하세요.\n현재 1.2.0 → 1.2.1 · 받을 용량: 약 203.3 MB (전체 파일)",
+    "btn": "업그레이드",
+    "later": "나중에"
+   }
+  },
+  {
+   "name": "시험 후 시험이 띄운 goodseedown 프로세스 정리",
+   "ok": true,
+   "detail": {
+    "before": 0,
+    "after": 0
+   }
+  }
+ ]
+}

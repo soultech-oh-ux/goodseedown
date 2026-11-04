@@ -83,7 +83,6 @@ if (app && typeof app.whenReady === 'function') {
       handle('analyze', async (url, opts) => { try { return { ok: true, result: await engine.analyze(str(url, 2100), { mode: opts && opts.mode === 'video' ? 'video' : opts && opts.mode === 'list' ? 'list' : 'auto', end: opts && opts.end }) }; } catch (e) { const { translateError } = require('../engine/util.cjs'); return { ok: false, code: e.code || '', error: e.code === 'bad-url' || e.code === 'aborted' ? e.message : translateError(e.raw || e.message).message }; } });
       handle('analyze-cancel', () => engine.cancelAnalyze());
       handle('add-downloads', req => { if (!req || !Array.isArray(req.items)) throw new Error('잘못된 입력입니다.'); return engine.addDownloads({ items: req.items.map(i => ({ url: str(i.url, 2100), title: typeof i.title === 'string' ? i.title.slice(0, 500) : undefined, duration: Number.isFinite(i.duration) ? i.duration : undefined, index: Number.isInteger(i.index) ? i.index : undefined })), options: req.options, saveDir: typeof req.saveDir === 'string' ? req.saveDir : undefined, subfolder: typeof req.subfolder === 'string' ? req.subfolder.slice(0, 200) : '', indexPrefix: !!req.indexPrefix, source: req.source }); });
-      handle('smart-add', async url => { try { return { ok: true, result: await engine.smartAdd(str(url, 2100)) }; } catch (e) { const { translateError } = require('../engine/util.cjs'); return { ok: false, error: e.code === 'bad-url' ? e.message : translateError(e.raw || e.message).message }; } });
       handle('jobs-list', () => engine.downloads.list());
       handle('job', async (action, id) => {
         id = str(id, 64);
@@ -117,6 +116,8 @@ if (app && typeof app.whenReady === 'function') {
       handle('engine-info', async () => ({ version: await engine.engine.currentVersion(), ...engine.engine.info() }));
       handle('engine-check', () => engineCheckAndOffer({ manual: true }));
       handle('app-update-check', () => updater.check({ manual: true }));
+      handle('app-update-info', () => updater.getAvailable());   // 화면 상단 '새 버전' 배너용 — 시작 시 자동 확인 결과(없으면 null)
+      handle('app-update-start', () => updater.upgrade());        // 배너의 [업그레이드]를 눌렀을 때만(자동 설치 없음)
       handle('show-licenses', () => showLicenses());
       handle('show-notice', () => showNotice());
       handle('open-author', async () => { try { await openExternal(AUTHOR_URL); return { ok: true, url: AUTHOR_URL }; } catch (e) { return { ok: false, error: e.message }; } });
